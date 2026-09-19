@@ -3,7 +3,7 @@
 CRM-система для сервисного центра по ремонту смартфонов.  
 Публичный сайт + панель управления + VK-бот с ИИ-ассистентом.
 
-**Репозиторий:** https://github.com/dima099990/main_diplom
+**Репозиторий:** https://github.com/dmitriyshock/main_diplom
 
 ---
 
@@ -23,7 +23,7 @@ CRM-система для сервисного центра по ремонту 
 ## Быстрый старт (локально)
 
 ```bash
-git clone https://github.com/dima099990/main_diplom && cd main_diplom
+git clone --branch work https://github.com/dmitriyshock/main_diplom && cd main_diplom
 
 python -m venv .venv
 source .venv/bin/activate     # Linux/Mac
@@ -32,21 +32,25 @@ source .venv/bin/activate     # Linux/Mac
 pip install -r requirements.txt
 ```
 
-Создать `.env` (или скопировать из `.env.example`):
+Создать `.env`:
 
 ```env
 DEBUG=True
 SECRET_KEY=любой-ключ
 ALLOWED_HOSTS=localhost,127.0.0.1
 USE_SQLITE=True
+SQLITE_NAME=db.local.sqlite3
 ```
+
+Если нужно начать с демонстрационных данных из репозитория, один раз скопируйте
+`db.sqlite3` в `db.local.sqlite3`; исходный файл не изменяется.
 
 ```bash
 python manage.py migrate
 python manage.py seed_data          # тестовые данные + admin/admin123
 python manage.py seed_iphone_prices # опционально: прайс iPhone
 
-python run.py
+python run.py --site-only
 ```
 
 | Адрес                      | Описание   |
@@ -63,7 +67,7 @@ python run.py
 ### Автоустановка (рекомендуется)
 
 ```bash
-wget https://raw.githubusercontent.com/dima099990/main_diplom/main/setup.sh
+wget https://raw.githubusercontent.com/dmitriyshock/main_diplom/work/setup.sh
 sudo bash setup.sh
 ```
 
@@ -91,7 +95,7 @@ start     # запустить
 
 ```bash
 cd /opt
-git clone https://github.com/dima099990/main_diplom main_diplom
+git clone --branch work https://github.com/dmitriyshock/main_diplom main_diplom
 cd main_diplom
 
 python3 -m venv .venv

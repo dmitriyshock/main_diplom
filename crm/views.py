@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.models import Brand, CallRequest, PhoneModel, RepairService, SiteSettings
-from .decorators import admin_required, crm_required, manager_required
+from .decorators import admin_required, crm_required, get_role, manager_required
 from .models import (
     Accessory, Appointment, Branch, Customer, Expense,
     Notification, OrderHistory, Part, PaymentRecord, PayrollRecord,
@@ -2173,14 +2173,18 @@ user_edit = employee_edit
 # ─── API ──────────────────────────────────────────────────────────────────────
 
 def api_prices(request):
-    services = RepairService.objects.filter(is_active=True).select_related(
+    services = RepairService.objects.filter(
+        is_active=True, phone_model__is_active=True, phone_model__brand__is_active=True,
+    ).select_related(
         'phone_model__brand'
     ).values('id', 'name', 'price_from', 'price_to', 'phone_model__name', 'phone_model__brand__name')
     return JsonResponse(list(services), safe=False)
 
 
 def api_models_for_brand(request, brand_id):
-    models = PhoneModel.objects.filter(brand_id=brand_id, is_active=True).values('id', 'name')
+    models = PhoneModel.objects.filter(
+        brand_id=brand_id, is_active=True, brand__is_active=True,
+    ).values('id', 'name')
     return JsonResponse(list(models), safe=False)
 
 

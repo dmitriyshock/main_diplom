@@ -1,164 +1,64 @@
-{% extends 'core/base.html' %}
 {% load static %}
-
-{% block content %}
-
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-bg">
-    <div class="hero-orb hero-orb--1"></div>
-    <div class="hero-orb hero-orb--2"></div>
-  </div>
-  <div class="container hero-grid">
-    <div class="hero-text" data-animate>
-      <div class="hero-badge">⚡ Ремонт в день обращения</div>
-      <h1>Ремонт телефонов<br><span class="accent">быстро</span> и <span class="accent">надёжно</span></h1>
-      <p class="hero-sub">Гарантия <strong>{{ site.warranty_days }} дней</strong> на все виды работ.<br>{{ site.working_hours }}</p>
-      <div class="hero-actions">
-        <a href="{{ site.telegram_bot_link }}" target="_blank" class="btn btn-lg">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.917 6.5l-1.698 8c-.13.578-.48.72-.97.447l-2.68-1.976-1.293 1.246c-.143.143-.263.263-.54.263l.19-2.72 4.955-4.477c.216-.19-.048-.297-.334-.107L7.558 13.83l-2.632-.824c-.572-.18-.584-.572.12-.847l10.286-3.967c.476-.173.894.116.585 1.308z"/></svg>
-          Написать в ВКонтакте
-        </a>
-        <a href="tel:{{ site.phone }}" class="btn btn-outline btn-lg">{{ site.phone }}</a>
-      </div>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ site.company_name }} — ремонт смартфонов. Узнайте стоимость и оставьте заявку. Гарантия {{ site.warranty_days }} дней.">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>{{ site.company_name }} — вернём телефон к жизни</title>
+  <link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260919-1">
+  <script src="{% static 'core/js/home.js' %}?v=20260919-6" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+<header class="header"><div class="wrap header-inner">
+  <a class="wordmark" href="{% url 'home' %}" aria-label="{{ site.company_name }} — главная"><span class="brand-symbol" aria-hidden="true">k<span>↗</span></span><span>{{ site.company_name|lower }}<small>сервис для ваших устройств</small></span></a>
+  <button class="menu-toggle" type="button" aria-controls="navigation" aria-expanded="false">Меню <span aria-hidden="true">☰</span></button>
+  <nav class="navigation" id="navigation" aria-label="Основная навигация"><a href="#services">Услуги и цены</a><a href="#approach">Как мы работаем</a><a href="#contacts">Контакты</a><a class="nav-book" href="#booking">Записаться <span aria-hidden="true">↗</span></a></nav>
+</div></header>
+{% if messages %}<div class="wrap message-list" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<main id="main">
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <div class="hero-copy"><p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> РЕМОНТ СМАРТФОНОВ · {{ site.company_name|upper }}</p>
+      <h1 id="hero-title">Любимый телефон.<br>Новая <span class="life-word">жизнь.<svg viewBox="0 0 350 18" aria-hidden="true"><path d="M3 12Q155-5 346 9M30 17Q174 3 324 14"/></svg></span></h1>
+      <p class="hero-description">Разбитый экран, уставшая батарея или сложная поломка — поможем снова быть на связи.</p>
+      <div class="hero-actions"><a class="button button-coral" href="#booking">Обсудить ремонт <span aria-hidden="true">↗</span></a><a class="text-link" href="{% url 'prices' %}">Посмотреть цены <span aria-hidden="true">→</span></a></div>
+      <div class="hero-note"><span class="shield-icon" aria-hidden="true">✓</span><p><strong>{{ site.warranty_days }} дней гарантии</strong><br>Забота об устройстве и после ремонта</p></div>
     </div>
-
-    <div class="hero-form card" data-animate data-delay="150">
-      <h3>Записаться на ремонт</h3>
-      <p class="form-sub">Перезвоним в течение 15 минут</p>
-      <form action="{% url 'contact_request' %}" method="post" class="contact-form" id="heroForm">
-        {% csrf_token %}
-        <input type="text" name="name" placeholder="Ваше имя" required>
-        <input type="text" name="phone" placeholder="Телефон или ВКонтакте" required>
-        <input type="text" name="device" placeholder="Устройство (напр. iPhone 14)">
-        <textarea name="message" placeholder="Опишите проблему" rows="2"></textarea>
-        {% if branches %}
-        <select name="branch_id" style="width:100%;padding:10px 14px;border-radius:10px;background:#1e293b;border:1px solid #334155;color:#cbd5e1;font-size:15px;">
-          <option value="">Выбрать филиал (необязательно)</option>
-          {% for b in branches %}
-          <option value="{{ b.pk }}">{{ b.name }}{% if b.address %} — {{ b.address }}{% endif %}</option>
-          {% endfor %}
-        </select>
-        {% endif %}
-        <button type="submit" class="btn btn-lg" style="width:100%">Записаться</button>
-      </form>
-      <div class="form-success" id="formSuccess" style="display:none">
-        <div class="success-icon">✓</div>
-        <p>Запись принята! Мы свяжемся с вами.</p>
-      </div>
+    <div class="hero-art" role="img" aria-label="Иллюстрация восстановленного смартфона с ярким экраном">
+      <div class="art-grid"></div><span class="art-index">DEVICE CARE / 01</span>
+      <svg class="phone-art" viewBox="0 0 520 600" aria-hidden="true">
+        <defs>
+          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#aaa9a1"/><stop offset=".18" stop-color="#393a35"/><stop offset=".48" stop-color="#11130f"/><stop offset=".8" stop-color="#5c5e57"/><stop offset="1" stop-color="#242621"/></linearGradient>
+          <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#dfecd3"/><stop offset="1" stop-color="#a3bbb0"/></linearGradient>
+          <linearGradient id="orange" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff815b"/><stop offset="1" stop-color="#e34528"/></linearGradient>
+          <clipPath id="screen-clip"><rect x="146" y="59" width="240" height="490" rx="34"/></clipPath>
+          <filter id="shadow" x="-50%" y="-30%" width="220%" height="180%"><feDropShadow dx="12" dy="22" stdDeviation="18" flood-color="#263027" flood-opacity=".22"/></filter>
+        </defs>
+        <g transform="rotate(12 260 300)" filter="url(#shadow)"><rect x="133" y="45" width="267" height="518" rx="48" fill="url(#body)"/><rect x="139" y="51" width="253" height="504" rx="40" fill="#101511" stroke="#8e9187"/>
+          <g clip-path="url(#screen-clip)"><rect x="146" y="59" width="240" height="490" fill="url(#screen)"/><circle cx="399" cy="332" r="186" fill="#f4f1d9"/><circle cx="385" cy="331" r="142" fill="#c7d6b9"/><circle cx="372" cy="331" r="100" fill="#163c36"/><path d="M91 505C198 338 281 422 422 260L460 590 88 600Z" fill="url(#orange)"/><path d="M88 574C211 365 275 466 438 309" fill="none" stroke="#ffae76" stroke-width="3"/><path d="M87 602C210 393 288 484 449 337" fill="none" stroke="#ffae76" stroke-width="2"/>
+            <text x="266" y="172" text-anchor="middle" fill="#193c33" font-family="Arial,sans-serif" font-size="53" font-weight="500" letter-spacing="-3">09:41</text><text x="266" y="195" text-anchor="middle" fill="#193c33" font-family="Arial,sans-serif" font-size="11">Хороший день, чтобы начать заново</text><rect x="224" y="532" width="84" height="4" rx="2" fill="#fff"/>
+          </g><rect x="225" y="69" width="80" height="23" rx="12" fill="#101511"/><circle cx="292" cy="80" r="4" fill="#263b38"/><path d="M132 151v46M132 211v38M401 177v61" stroke="#55594f" stroke-width="4" stroke-linecap="round"/>
+        </g>
+      </svg>
+      <div class="repair-label"><span class="label-check" aria-hidden="true">✓</span><span>Снова в деле<small>И готов к новым историям</small></span><span class="label-spark" aria-hidden="true">✳</span></div>
+      <div class="round-note" aria-hidden="true"><span>РЕМОНТИРОВАТЬ</span><strong>↗</strong><span>ЗНАЧИТ СОХРАНЯТЬ</span></div><span class="art-caption">Хорошие вещи заслуживают второго шанса.</span>
     </div>
-  </div>
-</section>
-
-<!-- STATS -->
-<section class="stats">
-  <div class="container stats-grid">
-    <div class="stat-item">
-      <span class="stat-num">9+</span>
-      <span class="stat-label">лет работы</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-num">15 000+</span>
-      <span class="stat-label">ремонтов</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-num">{{ site.warranty_days }}</span>
-      <span class="stat-label">дней гарантии</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-num">4.9★</span>
-      <span class="stat-label">средняя оценка</span>
-    </div>
-  </div>
-</section>
-
-<!-- POPULAR SERVICES -->
-{% if popular_services %}
-<section class="section services-preview">
-  <div class="container">
-    <div class="section-head">
-      <h2>Популярные услуги</h2>
-      <a href="{% url 'prices' %}" class="link-more">Весь прайс-лист →</a>
-    </div>
-    <div class="services-grid">
-      {% for svc in popular_services %}
-      <div class="service-card">
-        <div class="service-card__cat">{{ svc.category.icon }} {{ svc.category.name }}</div>
-        <div class="service-card__name">{{ svc.name }}</div>
-        {% if svc.description %}<div class="service-card__desc">{{ svc.description }}</div>{% endif %}
-        <div class="service-card__footer">
-          <span class="service-card__price">{{ svc.price_display }}</span>
-          <span class="service-card__time">⏱ {{ svc.duration }}</span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-{% endif %}
-
-<!-- WHY US -->
-<section class="section why-us">
-  <div class="container">
-    <h2>Почему выбирают нас</h2>
-    <div class="why-grid">
-      <div class="why-card">
-        <div class="why-icon">🔧</div>
-        <h3>Оригинальные запчасти</h3>
-        <p>Используем только сертифицированные комплектующие от проверенных поставщиков</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">⚡</div>
-        <h3>Быстрый ремонт</h3>
-        <p>Большинство поломок устраняем в день обращения — прямо при вас</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">🛡</div>
-        <h3>Гарантия {{ site.warranty_days }} дней</h3>
-        <p>На все виды работ и установленные запчасти — письменно</p>
-      </div>
-      <div class="why-card">
-        <div class="why-icon">💳</div>
-        <h3>Удобная оплата</h3>
-        <p>Наличные, карта, перевод — оплачивайте как удобно вам</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- REVIEWS -->
-{% if reviews %}
-<section class="section reviews-section">
-  <div class="container">
-    <h2>Отзывы клиентов</h2>
-    <div class="reviews-grid">
-      {% for review in reviews %}
-      <div class="review-card">
-        <div class="review-rating">{% for i in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</div>
-        <p class="review-text">{{ review.text }}</p>
-        <div class="review-author">
-          <strong>{{ review.author }}</strong>
-          {% if review.device %}<span>{{ review.device }}</span>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-{% endif %}
-
-<!-- CTA BOTTOM -->
-<section class="cta-section">
-  <div class="container cta-inner">
-    <div>
-      <h2>Есть проблема с телефоном?</h2>
-      <p>Напишите нам — диагностика бесплатная</p>
-    </div>
-    <div class="cta-actions">
-      <a href="{{ site.telegram_bot_link }}" target="_blank" class="btn btn-lg">Написать в ВКонтакте</a>
-      <a href="tel:{{ site.phone }}" class="btn btn-outline btn-lg">{{ site.phone }}</a>
-    </div>
-  </div>
-</section>
-
-{% endblock %}
+  </section>
+  {% if brands %}<div class="brands wrap"><p>Знакомы с вашим<br>устройством</p><div class="brand-list">{% for brand in brands %}<a href="{% url 'prices' %}?q={{ brand.name|urlencode }}">{{ brand.name }}</a>{% endfor %}</div><a class="brand-more" href="{% url 'prices' %}">Все модели ↗</a></div>{% endif %}
+  <section class="section wrap" id="services" aria-labelledby="services-title">
+    <div class="section-heading"><div><p class="eyebrow">01 / ЧТО ПОЧИНИМ</p><h2 id="services-title">Есть проблема.<br>Найдём решение.</h2></div><div class="section-aside"><p>Стоимость зависит от модели и поломки.<br>Начните с прайса для вашего устройства.</p><a class="text-link" href="{% url 'prices' %}">Весь прайс-лист <span aria-hidden="true">↗</span></a></div></div>
+    <div class="service-grid">{% for svc in popular_services %}<article class="service-card"><div class="service-top"><span class="service-number">0{{ forloop.counter }}</span><span class="service-glyph" aria-hidden="true">{% if 'аккумулятор' in svc.name|lower %}▰{% elif 'экран' in svc.name|lower or 'дисплей' in svc.name|lower %}▯{% else %}↗{% endif %}</span></div><p class="service-model">{{ svc.phone_model.brand.name }} · {{ svc.phone_model.name }}</p><h3>{{ svc.name }}</h3>{% if svc.description %}<p class="service-description">{{ svc.description }}</p>{% endif %}<div class="service-bottom"><div><strong>{{ svc.price_display }}</strong>{% if svc.duration %}<span>Ориентир по времени: {{ svc.duration }}</span>{% endif %}</div><a class="circle-link" href="#booking" data-device="{{ svc.phone_model.full_name }}" data-problem="{{ svc.name }}" aria-label="Записаться: {{ svc.name }}, {{ svc.phone_model.full_name }}">↗</a></div></article>{% empty %}<div class="empty-services"><h3>Расскажите, что случилось</h3><p>Уточним модель, разберёмся в проблеме и сориентируем по стоимости.</p><a class="text-link" href="#booking">Обсудить ремонт ↗</a></div>{% endfor %}</div>
+    <p class="price-note">Цены в каталоге — ориентир. Итоговая стоимость зависит от состояния устройства и выбранных комплектующих.</p>
+  </section>
+  <section class="approach" id="approach" aria-labelledby="approach-title"><div class="wrap approach-grid"><div class="approach-intro"><p class="eyebrow">02 / ВСЁ ПОНЯТНО</p><h2 id="approach-title">Ремонт —<br>без лишних<br><span>сложностей.</span></h2><a class="button button-light" href="#booking">Начнём с вашей истории <span aria-hidden="true">↗</span></a><div class="approach-art" aria-hidden="true">✳</div></div><ol class="steps"><li><span>01</span><div><h3>Расскажите о поломке</h3><p>Оставьте заявку, позвоните или приходите в сервис. Поможем разобраться, с чего начать.</p></div></li><li><span>02</span><div><h3>Уточним детали</h3><p>Проверим устройство и обсудим необходимые работы, стоимость и сроки ремонта.</p></div></li><li><span>03</span><div><h3>Вернём в рабочий ритм</h3><p>После ремонта проверим устройство. На выполненные работы действует гарантия {{ site.warranty_days }} дней.</p></div></li></ol></div></section>
+  {% if reviews %}<section class="section wrap" aria-labelledby="reviews-title"><div class="section-heading"><div><p class="eyebrow">СЛОВО КЛИЕНТАМ</p><h2 id="reviews-title">За каждым ремонтом —<br>чья-то история.</h2></div></div><div class="reviews-grid">{% for review in reviews %}<figure class="review"><div class="review-stars" aria-label="Оценка {{ review.rating }} из 5">{% for i in '12345' %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</div><blockquote>{{ review.text }}</blockquote><figcaption><strong>{{ review.author }}</strong>{% if review.device %}<span>{{ review.device }}</span>{% endif %}</figcaption></figure>{% endfor %}</div></section>{% endif %}
+  <section class="section wrap booking-section" id="booking" aria-labelledby="booking-title"><div class="booking-copy"><p class="eyebrow">03 / ДАВАЙТЕ ПОЧИНИМ</p><h2 id="booking-title">Всё начинается<br>с <span>«алло».</span></h2><p>Оставьте контакты и пару слов о телефоне.<br>Мы свяжемся с вами в рабочее время.</p><a class="booking-phone" href="tel:{{ site.phone }}">{{ site.phone }} ↗</a><p class="muted">{{ site.working_hours }}</p><div class="booking-note"><span aria-hidden="true">↳</span><p>Не знаете, в чём проблема?<br>Так и напишите. Разберёмся вместе.</p></div></div>
+    <div class="booking-panel"><form action="{% url 'contact_request' %}" method="post" id="bookingForm"><h3>Записаться на ремонт</h3><p class="form-intro">Знакомство с вашим устройством начнём здесь.</p>{% csrf_token %}<div class="form-row"><label for="booking-name">Ваше имя <span>*</span><input id="booking-name" name="name" autocomplete="name" maxlength="200" placeholder="Как к вам обращаться" required></label><label for="booking-phone">Телефон или VK <span>*</span><input id="booking-phone" name="phone" autocomplete="tel" maxlength="30" placeholder="+7 или ссылка на профиль" required></label></div><label for="booking-device">Модель устройства<input id="booking-device" name="device" maxlength="200" placeholder="Например, iPhone 14"></label><label for="booking-message">Что случилось?<textarea id="booking-message" name="message" rows="3" maxlength="5000" placeholder="Быстро садится батарея, разбит экран…"></textarea></label>{% if branches %}<label for="booking-branch">Удобный сервис<select id="booking-branch" name="branch_id"><option value="">Помогите выбрать филиал</option>{% for branch in branches %}<option value="{{ branch.pk }}">{{ branch.name }} — {{ branch.address }}</option>{% endfor %}</select></label>{% endif %}<p class="form-error" id="formError" role="alert" tabindex="-1" hidden></p><button class="button button-coral form-submit" type="submit"><span>Отправить заявку</span><span aria-hidden="true">↗</span></button><p class="form-footnote">Используем указанный контакт, чтобы ответить на вашу заявку. Поля со звёздочкой обязательны.</p></form><div class="form-success" id="formSuccess" role="status" tabindex="-1" hidden><span class="success-check" aria-hidden="true">✓</span><h3>Вы на шаг ближе<br>к рабочему телефону.</h3><p>Заявка принята. Свяжемся с вами в рабочее время, чтобы обсудить детали.</p><button class="text-link" id="newRequest" type="button">Отправить ещё одну заявку ↗</button></div></div>
+  </section>
+  <section class="faq-section wrap" aria-labelledby="faq-title"><div><p class="eyebrow">ЕСТЬ ВОПРОС?</p><h2 id="faq-title">Разложим<br>по полочкам.</h2></div><div class="faq-list"><details><summary>Сколько будет стоить ремонт?<span aria-hidden="true">+</span></summary><p>Ориентировочные цены указаны в <a href="{% url 'prices' %}">прайс-листе</a>. Точная стоимость зависит от модели, неисправности и необходимых деталей. Оставьте заявку, чтобы обсудить ваш случай.</p></details><details><summary>Можно ли приехать без записи?<span aria-hidden="true">+</span></summary><p>Вы можете обратиться в сервис в рабочее время: {{ site.working_hours }}. Чтобы уточнить загрузку и наличие деталей, лучше связаться с нами заранее.</p></details><details><summary>Что сделать перед передачей телефона?<span aria-hidden="true">+</span></summary><p>Если устройство работает, сделайте резервную копию важных данных. Возьмите с собой телефон, а при проблемах с зарядкой — используемый кабель и адаптер. Остальные детали уточним при обращении.</p></details><details><summary>Есть ли гарантия на ремонт?<span aria-hidden="true">+</span></summary><p>Гарантийный срок — {{ site.warranty_days }} дней. Условия для конкретной работы и комплектующих уточните при оформлении ремонта.</p></details></div></section>
+  <section class="contacts-section wrap" id="contacts" aria-labelledby="contacts-title"><div><p class="eyebrow">БУДЕМ НА СВЯЗИ</p><h2 id="contacts-title">До встречи<br>в {{ site.company_name }}<span class="coral">.</span></h2></div><div class="contact-list">{% for branch in branches %}<div class="contact-place"><h3>{{ branch.name }}</h3><p>{{ branch.address }}</p>{% if branch.phone %}<a href="tel:{{ branch.phone }}">{{ branch.phone }} ↗</a>{% endif %}</div>{% empty %}<div class="contact-place"><h3>Наш сервис</h3><p>{{ site.address }}</p><a href="tel:{{ site.phone }}">{{ site.phone }} ↗</a></div>{% endfor %}<p class="muted">{{ site.working_hours }}</p><a class="text-link" href="{% url 'contacts' %}">Контакты и как добраться ↗</a>{% if site.telegram_bot_link and 'your_group_id' not in site.telegram_bot_link %}<a class="text-link" href="{{ site.telegram_bot_link }}" target="_blank" rel="noopener noreferrer">Написать в VK ↗</a>{% endif %}</div></section>
+</main>
+<footer class="footer wrap"><a class="footer-logo" href="{% url 'home' %}">{{ site.company_name|lower }}<span>↗</span></a><div class="footer-bottom"><p>© {% now 'Y' %} {{ site.company_name }}</p><span>Хорошим вещам — долгую жизнь.</span><a href="{% url 'about' %}">О сервисе ↗</a><a href="#main">Наверх ↑</a></div></footer>
+</body></html>

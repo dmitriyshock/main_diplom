@@ -508,6 +508,14 @@ class Expense(models.Model):
 
 # ─── Payroll ─────────────────────────────────────────────────────────────────
 
+def current_year():
+    return timezone.localdate().year
+
+
+def current_month():
+    return timezone.localdate().month
+
+
 class PayrollRecord(models.Model):
     RECORD_TYPES = [
         ('repair_bonus', 'Бонус за ремонт'),
@@ -523,8 +531,8 @@ class PayrollRecord(models.Model):
     description = models.CharField("Описание", max_length=300, blank=True)
     repair_order = models.ForeignKey(RepairOrder, on_delete=models.SET_NULL, null=True, blank=True,
                                      verbose_name="Заказ")
-    period_year = models.PositiveIntegerField("Год", default=timezone.now().year)
-    period_month = models.PositiveIntegerField("Месяц", default=timezone.now().month)
+    period_year = models.PositiveIntegerField("Год", default=current_year)
+    period_month = models.PositiveIntegerField("Месяц", default=current_month)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_payroll')
     created_at = models.DateTimeField(auto_now_add=True)
 

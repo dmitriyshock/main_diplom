@@ -73,7 +73,7 @@ if USE_SQLITE:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': BASE_DIR / config('SQLITE_NAME', default='db.sqlite3'),
         }
     }
 
@@ -95,14 +95,24 @@ TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-# CompressedStaticFilesStorage — сжимает файлы (gzip/brotli), но не трогает CSS-ссылки.
-# Надёжнее CompressedManifestStaticFilesStorage, которое может падать на CSS post-processing.
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': MEDIA_ROOT,
+            'base_url': MEDIA_URL,
+        },
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
+
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
