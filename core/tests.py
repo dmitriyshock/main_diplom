@@ -44,7 +44,7 @@ class PublicHomepageTests(TestCase):
         response = self.client.post(
             reverse('contact_request'),
             {'name': 'Иван', 'phone': 'vk.com/id1', 'device': 'iPhone 15',
-             'message': 'Не включается', 'branch_id': self.branch.pk},
+             'message': 'Не включается', 'branch_id': self.branch.pk, 'pd_consent': 'on'},
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
 
@@ -64,7 +64,7 @@ class PublicHomepageTests(TestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
         too_long = self.client.post(
-            reverse('contact_request'), {'name': 'Иван', 'phone': 'x' * 31},
+            reverse('contact_request'), {'name': 'Иван', 'phone': 'x' * 31, 'pd_consent': 'on'},
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
 
@@ -77,13 +77,13 @@ class PublicHomepageTests(TestCase):
     def test_booking_allows_blank_branch_but_rejects_invalid_or_inactive_branch(self):
         inactive_branch = Branch.objects.create(name='Закрыт', is_active=False)
         blank = self.client.post(
-            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'branch_id': ''},
+            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'branch_id': '', 'pd_consent': 'on'},
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
         self.assertEqual(blank.status_code, 200)
         for branch_id in ('not-an-id', str(inactive_branch.pk)):
             response = self.client.post(
-                reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'branch_id': branch_id},
+                reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'branch_id': branch_id, 'pd_consent': 'on'},
                 HTTP_X_REQUESTED_WITH='XMLHttpRequest',
             )
             self.assertEqual(response.status_code, 400)
@@ -98,7 +98,7 @@ class PublicHomepageTests(TestCase):
     def test_booking_requires_a_valid_csrf_token(self):
         csrf_client = Client(enforce_csrf_checks=True)
         rejected = csrf_client.post(
-            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000'},
+            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'pd_consent': 'on'},
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
         self.assertEqual(rejected.status_code, 403)
@@ -106,7 +106,7 @@ class PublicHomepageTests(TestCase):
 
         csrf_client.get(reverse('home'))
         accepted = csrf_client.post(
-            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000'},
+            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'pd_consent': 'on'},
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
             HTTP_X_CSRFTOKEN=csrf_client.cookies['csrftoken'].value,
         )
@@ -115,7 +115,7 @@ class PublicHomepageTests(TestCase):
 
     def test_non_ajax_redirect_does_not_follow_external_referer(self):
         response = self.client.post(
-            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000'},
+            reverse('contact_request'), {'name': 'Иван', 'phone': '+79990000000', 'pd_consent': 'on'},
             HTTP_REFERER='https://attacker.example/next',
         )
 
@@ -142,3 +142,47 @@ class PublicHomepageTests(TestCase):
         self.assertEqual([item['name'] for item in prices.json()], ['Замена дисплея'])
         self.assertEqual(visible_models.json(), [{'id': self.model.pk, 'name': 'iPhone 15'}])
         self.assertEqual(hidden_models.json(), [])
+
+    def test_all_public_pages_use_shared_navigation_theme_and_legal_footer(self):
+        page_names = ('home', 'prices', 'about', 'contacts')
+        for page_name in page_names:
+            with self.subTest(page=page_name):
+                response = self.client.get(reverse(page_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'data-theme-toggle')
+                self.assertContains(response, reverse('prices'))
+                self.assertContains(response, reverse('about'))
+                self.assertContains(response, reverse('contacts'))
+                self.assertContains(response, reverse('privacy'))
+                self.assertContains(response, reverse('personal_data'))
+                self.assertContains(response, reverse('cookies'))
+                self.assertContains(response, reverse('terms'))
+
+    def test_legal_placeholders_are_available_and_marked_as_drafts(self):
+        for page_name in ('privacy', 'personal_data', 'cookies', 'terms'):
+            with self.subTest(page=page_name):
+                response = self.client.get(reverse(page_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'Черновик документа')
+                self.assertContains(response, 'юристом')
+
+    def test_public_forms_link_to_personal_data_consent(self):
+        for page_name in ('home', 'contacts'):
+            with self.subTest(page=page_name):
+                response = self.client.get(reverse(page_name))
+                self.assertContains(response, 'name="pd_consent"')
+                self.assertContains(response, reverse('personal_data'))
+
+    def test_booking_rejects_missing_personal_data_consent(self):
+        response = self.client.post(
+            reverse('contact_request'),
+            {'name': 'Иван', 'phone': '+79990000000'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()['error'],
+            'Подтвердите согласие на обработку персональных данных.',
+        )
+        self.assertEqual(Appointment.objects.count(), 0)

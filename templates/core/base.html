@@ -1,136 +1,106 @@
 {% load static %}
-<!DOCTYPE html>
-<html lang="ru">
+<!doctype html>
+<html lang="ru" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ site.company_name }} — Ремонт телефонов{% endblock %}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{% block meta_description %}{{ site.company_name }} — ремонт смартфонов, понятный прайс и запись в сервис.{% endblock %}">
+  <meta name="theme-color" content="#f6f5f0" id="themeColor">
+  <title>{% block title %}{{ site.company_name }} — ремонт смартфонов{% endblock %}</title>
   {% if site.logo %}<link rel="icon" href="{{ site.logo.url }}">{% endif %}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
-  <style>
-    .nav-inner { height: 80px; }
-    .logo-img { height: 60px; max-width: 220px; width: auto; object-fit: contain; flex-shrink: 0; }
-    .nav-phone { white-space: nowrap; }
-    @media (max-width: 640px) {
-      .nav-inner { height: 64px !important; }
-      .logo-img { height: 44px !important; max-width: 180px !important; }
-      .burger { display: flex !important; }
-      .nav-links {
-        display: none !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        position: fixed !important;
-        top: 64px !important;
-        left: 0 !important; right: 0 !important; bottom: 0 !important;
-        height: calc(100vh - 64px) !important;
-        background: #0d0d0d !important;
-        padding: 20px 16px !important;
-        gap: 0 !important;
-        z-index: 9999 !important;
-        overflow-y: auto !important;
-      }
-      .nav-links.open { display: flex !important; }
-      .nav-links li { display: block !important; width: 100% !important; }
-      .nav-links li a { display: block !important; font-size: 17px !important; padding: 14px 16px !important; border-radius: 8px !important; width: 100% !important; color: #e8e8e8 !important; }
-      .nav-links li a.active { background: #252525 !important; color: #fff !important; }
-      .nav-links li a.btn { background: #f24a47 !important; color: #fff !important; text-align: center !important; margin-top: 8px !important; }
-      .nav-links li a.nav-phone { color: #f24a47 !important; font-weight: 700 !important; }
-    }
-  </style>
+  <script>
+    (function () {
+      document.documentElement.classList.add('js');
+      var saved = null;
+      try { saved = localStorage.getItem('kayros-theme'); } catch (error) { saved = null; }
+      var theme = saved === 'dark' || saved === 'light'
+        ? saved
+        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = theme;
+    }());
+  </script>
+  <link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260920-1">
   {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}public-page{% endblock %}">
+<a class="skip-link" href="#main">Перейти к содержимому</a>
 
-<nav class="navbar">
-  <div class="container nav-inner">
-    <a href="{% url 'home' %}" class="logo">
-      {% if site.logo %}<img src="{{ site.logo.url }}" alt="{{ site.company_name }}" class="logo-img">{% else %}<span class="logo-mark">●</span>{% endif %}{{ site.company_name }}
+<header class="header" id="top">
+  <div class="wrap header-inner">
+    <a class="wordmark" href="{% url 'home' %}" aria-label="{{ site.company_name }} — главная">
+      <span class="brand-symbol" aria-hidden="true">k<span>↗</span></span>
+      <span>{{ site.company_name|lower }}<small>сервис для ваших устройств</small></span>
     </a>
-    <button class="burger" id="burger" aria-label="Меню">
-      <span></span><span></span><span></span>
+
+    <button class="menu-toggle" type="button" aria-label="Открыть меню" aria-controls="navigation" aria-expanded="false">
+      <span>Меню</span><span class="menu-icon" aria-hidden="true">☰</span>
     </button>
-    <ul class="nav-links" id="navLinks">
-      <li><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}class="active"{% endif %}>Главная</a></li>
-      <li><a href="{% url 'about' %}" {% if request.resolver_match.url_name == 'about' %}class="active"{% endif %}>О нас</a></li>
-      <li><a href="{% url 'prices' %}" {% if request.resolver_match.url_name == 'prices' %}class="active"{% endif %}>Цены</a></li>
-      <li><a href="{% url 'contacts' %}" {% if request.resolver_match.url_name == 'contacts' %}class="active"{% endif %}>Контакты</a></li>
-      <li><a href="{% url 'contacts' %}#booking-form" class="btn btn-sm" style="padding:.4rem 1rem">Записаться</a></li>
-      <li><a href="tel:{{ site.phone }}" class="nav-phone">{{ site.phone }}</a></li>
-    </ul>
+
+    <nav class="navigation" id="navigation" aria-label="Основная навигация">
+      <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}class="active" aria-current="page"{% endif %}>Главная</a>
+      <a href="{% url 'prices' %}" {% if request.resolver_match.url_name == 'prices' %}class="active" aria-current="page"{% endif %}>Услуги и цены</a>
+      <a href="{% url 'about' %}" {% if request.resolver_match.url_name == 'about' %}class="active" aria-current="page"{% endif %}>О сервисе</a>
+      <a href="{% url 'contacts' %}" {% if request.resolver_match.url_name == 'contacts' %}class="active" aria-current="page"{% endif %}>Контакты</a>
+      <a class="header-phone" href="tel:{{ site.phone }}">{{ site.phone }}</a>
+      <a class="nav-book" href="{% url 'contacts' %}#booking-form">Записаться <span aria-hidden="true">↗</span></a>
+    </nav>
+
+    <button class="theme-toggle" type="button" aria-label="Включить тёмную тему" aria-pressed="false" data-theme-toggle>
+      <span class="theme-toggle-icon" aria-hidden="true">◐</span>
+      <span data-theme-label>Тёмная</span>
+    </button>
   </div>
-</nav>
+</header>
 
 {% if messages %}
-<div class="messages-container">
-  {% for message in messages %}
-    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-  {% endfor %}
+<div class="wrap message-list" role="status" aria-live="polite">
+  {% for message in messages %}<p class="message message-{{ message.tags }}">{{ message }}</p>{% endfor %}
 </div>
 {% endif %}
 
-{% block content %}{% endblock %}
+<main id="main">
+  {% block content %}{% endblock %}
+</main>
 
-<footer class="footer">
-  <div class="container footer-inner">
-    <div class="footer-brand">
-      <a href="{% url 'home' %}" class="logo">{% if site.logo %}<img src="{{ site.logo.url }}" alt="{{ site.company_name }}" class="logo-img">{% else %}<span class="logo-mark">●</span>{% endif %}{{ site.company_name }}</a>
-      <p>{{ site.tagline }}</p>
+<footer class="site-footer">
+  <div class="wrap">
+    <a class="footer-logo" href="{% url 'home' %}">{{ site.company_name|lower }}<span aria-hidden="true">↗</span></a>
+    <div class="footer-grid">
+      <div class="footer-intro">
+        <p class="eyebrow">СЕРВИС ДЛЯ ВАШИХ УСТРОЙСТВ</p>
+        <p>Помогаем продлить жизнь технике и заранее объясняем, из чего складываются работы.</p>
+      </div>
+      <div class="footer-column">
+        <p class="footer-title">Сервис</p>
+        <a href="{% url 'prices' %}">Услуги и цены</a>
+        <a href="{% url 'contacts' %}#booking-form">Записаться на ремонт</a>
+        <a href="{% url 'about' %}">О Kayros</a>
+        <a href="{% url 'contacts' %}">Контакты и адрес</a>
+      </div>
+      <div class="footer-column">
+        <p class="footer-title">Документы</p>
+        <a href="{% url 'privacy' %}">Политика конфиденциальности</a>
+        <a href="{% url 'personal_data' %}">Согласие на обработку данных</a>
+        <a href="{% url 'cookies' %}">Использование cookie</a>
+        <a href="{% url 'terms' %}">Правила оказания услуг</a>
+      </div>
+      <div class="footer-column footer-contact">
+        <p class="footer-title">Связаться</p>
+        <a class="footer-phone" href="tel:{{ site.phone }}">{{ site.phone }}</a>
+        <span>{{ site.working_hours }}</span>
+        <span>{{ site.actual_address|default:site.address }}</span>
+        {% if site.telegram_bot_link and 'your_group_id' not in site.telegram_bot_link %}<a href="{{ site.telegram_bot_link }}" target="_blank" rel="noopener noreferrer">Написать во ВКонтакте ↗</a>{% endif %}
+      </div>
     </div>
-    <div class="footer-links">
-      <a href="{% url 'about' %}">О нас</a>
-      <a href="{% url 'prices' %}">Цены</a>
-      <a href="{% url 'contacts' %}">Контакты</a>
+    <div class="footer-bottom">
+      <p>© {% now 'Y' %} {{ site.company_name }}</p>
+      <p>Информация о стоимости носит справочный характер. Итоговая цена определяется после диагностики.</p>
+      <a href="#top">Наверх ↑</a>
     </div>
-    <div class="footer-contacts">
-      <a href="tel:{{ site.phone }}">{{ site.phone }}</a>
-      <span>{{ site.working_hours }}</span>
-      <a href="{{ site.telegram_bot_link }}" target="_blank" class="btn btn-sm">Написать в ВКонтакте</a>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <p>© {% now "Y" %} {{ site.company_name }}. Все права защищены.</p>
   </div>
 </footer>
 
-<script src="{% static 'core/js/main.js' %}"></script>
-
-<script>
-/* ─── Маска телефона +7 (___) ___-__-__ ─── */
-(function () {
-  function applyPhoneMask(el) {
-    function fmt(raw) {
-      var d = raw.replace(/\D/g, '');
-      if (d.charAt(0) === '8') d = '7' + d.slice(1);
-      if (d.length > 0 && d.charAt(0) !== '7') d = '7' + d;
-      d = d.slice(0, 11);
-      var r = '';
-      if (d.length >= 1) r = '+7';
-      if (d.length >= 2) r += ' (' + d.slice(1, Math.min(4, d.length));
-      if (d.length >= 4) r += ') ' + d.slice(4, Math.min(7, d.length));
-      if (d.length >= 7) r += '-' + d.slice(7, Math.min(9, d.length));
-      if (d.length >= 9) r += '-' + d.slice(9, 11);
-      return r;
-    }
-    el.addEventListener('input', function () { this.value = fmt(this.value); });
-    el.addEventListener('focus', function () { if (!this.value) this.value = '+7 ('; });
-    el.addEventListener('blur',  function () {
-      if (this.value === '+7 (' || this.value === '+7') this.value = '';
-    });
-    el.addEventListener('keydown', function (e) {
-      if (e.key === 'Backspace' && (this.value === '+7 (' || this.value === '+7')) {
-        this.value = ''; e.preventDefault();
-      }
-    });
-  }
-  document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-phone]').forEach(applyPhoneMask);
-  });
-})();
-</script>
-
+<script src="{% static 'core/js/main.js' %}?v=20260920-1" defer></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -1,215 +1,59 @@
 {% extends 'core/base.html' %}
-{% block title %}Прайс-лист — {{ site.company_name }}{% endblock %}
-
-{% block extra_css %}
-<style>
-/* ─── Accordion ─── */
-.acc-brand { margin-bottom: 16px; border-radius: 14px; overflow: hidden; border: 1px solid #1e1e1e; }
-.acc-brand-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 24px; background: #181818; cursor: pointer;
-  user-select: none; transition: background .2s;
-}
-.acc-brand-header:hover { background: #1f1f1f; }
-.acc-brand-header h2 { font-size: 22px; font-weight: 800; color: #fff; margin: 0; }
-.acc-brand-header .acc-count { font-size: 12px; color: #555; margin-left: 12px; }
-.acc-brand-header .acc-chevron {
-  font-size: 18px; color: #555; transition: transform .25s; flex-shrink: 0;
-}
-.acc-brand-header.open .acc-chevron { transform: rotate(180deg); }
-
-.acc-brand-body { background: #141414; display: none; }
-.acc-brand-body.open { display: block; }
-
-/* Model accordion */
-.acc-model { border-top: 1px solid #1e1e1e; }
-.acc-model-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px; cursor: pointer; user-select: none;
-  background: #141414; transition: background .15s;
-}
-.acc-model-header:hover { background: #191919; }
-.acc-model-header h3 { font-size: 16px; font-weight: 700; color: #e0e0e0; margin: 0; }
-.acc-model-header .acc-svc-count { font-size: 12px; color: #555; margin-left: 10px; }
-.acc-model-header .acc-chevron { font-size: 14px; color: #555; transition: transform .25s; }
-.acc-model-header.open .acc-chevron { transform: rotate(180deg); color: #f24a47; }
-
-.acc-model-body { display: none; }
-.acc-model-body.open { display: block; }
-
-/* Service rows */
-.svc-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 24px; border-top: 1px solid #1a1a1a;
-}
-.svc-row:hover { background: #181818; }
-.svc-name { color: #e0e0e0; font-size: 14px; font-weight: 500; }
-.svc-duration { color: #555; font-size: 12px; margin-top: 2px; }
-.svc-price { color: #f24a47; font-weight: 700; font-size: 16px; white-space: nowrap; }
-
-/* Search bar */
-.prices-search {
-  display: flex; gap: 10px; max-width: 540px; margin: 0 auto 36px;
-}
-.prices-search input {
-  flex: 1; background: #181818; border: 1px solid #2a2a2a; border-radius: 10px;
-  padding: 13px 18px; color: #e0e0e0; font-size: 15px; outline: none; transition: border-color .2s;
-}
-.prices-search input:focus { border-color: #f24a47; }
-.prices-search button {
-  background: #f24a47; color: #fff; border: none; border-radius: 10px;
-  padding: 13px 22px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity .2s;
-}
-.prices-search button:hover { opacity: .85; }
-.prices-search .reset-link {
-  background: #222; color: #888; border: 1px solid #2a2a2a; border-radius: 10px;
-  padding: 13px 16px; text-decoration: none; white-space: nowrap; display: flex; align-items: center;
-}
-.prices-search .reset-link:hover { color: #e0e0e0; }
-
-/* CTA bottom */
-.prices-cta {
-  text-align: center; margin-top: 48px; padding: 36px;
-  background: #141414; border-radius: 14px; border: 1px solid #1e1e1e;
-}
-.prices-cta h3 { color: #fff; margin-bottom: 8px; font-size: 20px; }
-.prices-cta p  { color: #666; margin-bottom: 22px; }
-.prices-cta a  {
-  background: #f24a47; color: #fff; padding: 13px 28px;
-  border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block;
-}
-.prices-cta a:hover { opacity: .85; }
-
-/* Search result mode: no accordion, flat list */
-.search-brand-title { font-size: 22px; font-weight: 800; color: #fff; margin: 32px 0 12px; }
-.search-model-title { font-size: 16px; font-weight: 700; color: #ccc; margin: 16px 0 6px; padding-left: 4px; }
-</style>
-{% endblock %}
-
+{% load static %}
+{% block title %}Услуги и цены на ремонт — {{ site.company_name }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/prices.css' %}?v=20260920-1">{% endblock %}
 {% block content %}
-<section class="section">
-  <div class="container">
-    <h1 class="section-title">Прайс-лист на ремонт</h1>
-    <p class="section-subtitle">Выберите марку и модель — найдите актуальные цены</p>
-
-    <!-- Search -->
-    <form method="get" class="prices-search">
-      <input type="text" name="q" value="{{ search_q }}" placeholder="🔍 Поиск по модели или услуге...">
-      <button type="submit">Найти</button>
-      {% if search_q or selected_model %}
-      <a href="{% url 'prices' %}" class="reset-link">✕ Сбросить</a>
-      {% endif %}
+<div class="prices-page">
+  <section class="price-hero wrap" aria-labelledby="price-title">
+    <div class="price-hero-copy">
+      <nav class="price-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'home' %}">Главная</a><span aria-hidden="true">/</span><span aria-current="page">Услуги и цены</span></nav>
+      <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> ПОНЯТНО О СТОИМОСТИ</p>
+      <h1 id="price-title">Новая жизнь.<br><span>Знакомому<br>устройству.</span></h1>
+      <p class="price-hero-description">Любимый телефон ещё многое может.<br>Найдите свою модель и узнайте,<br>сколько стоит вернуть его в строй.</p>
+      <a class="button button-coral" href="#price-catalog">Найти стоимость ремонта <span aria-hidden="true">↘</span></a>
+    </div>
+    <div class="price-hero-art" aria-hidden="true">
+      <span class="price-art-index">{{ site.company_name|upper }} / CARE & REPAIR</span><span class="price-art-orbit"></span>
+      <div class="price-device"><div class="price-device-screen"><span class="price-device-camera"></span><span class="price-device-time">09:41</span><span class="price-device-caption">Всё снова работает.</span><span class="price-device-flower">✳</span><span class="price-device-bar"></span></div></div>
+      <div class="price-receipt"><span class="price-receipt-top">ХОРОШИЙ ПЛАН <span>↗</span></span><strong>Починить.<br>Сохранить.<br>Продолжить.</strong><div class="price-receipt-line"></div><span class="price-receipt-bottom">Ваш телефон + наша забота <span>✓</span></span></div>
+      <div class="price-warranty-seal"><strong>{{ site.warranty_days }}</strong><span>ДНЕЙ<br>ГАРАНТИИ</span></div><span class="price-art-caption">Для новых звонков, кадров и историй.</span>
+    </div>
+  </section>
+  <div class="price-promises wrap" aria-label="О ремонте"><p><span>01</span> Выберите своё устройство</p><p><span>02</span> Найдите нужную услугу</p><p><span>03</span> Обсудим детали ремонта</p></div>
+  <section class="price-catalog wrap" id="price-catalog" aria-labelledby="catalog-title">
+    <div class="price-catalog-heading"><div><p class="eyebrow">ПРАЙС-ЛИСТ / НАЙДЁМ РЕШЕНИЕ</p><h2 id="catalog-title">Что будем чинить?</h2></div><p>Модель, неисправность, стоимость.<br>Всё нужное — в одном месте.</p></div>
+    <form method="get" action="{% url 'prices' %}#price-catalog" class="price-filters" role="search" aria-label="Поиск стоимости ремонта">
+      <label class="price-search-field" for="price-search"><span>Модель или услуга</span><span class="price-input-wrap"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 5 5"></path></svg><input id="price-search" type="search" name="q" value="{{ search_q }}" placeholder="Например, iPhone или замена экрана" maxlength="200"></span></label>
+      <label class="price-model-field" for="price-model"><span>Ваше устройство</span><select id="price-model" name="model"><option value="">Все модели</option>{% regroup all_models by brand as model_brands %}{% for group in model_brands %}<optgroup label="{{ group.grouper.name }}">{% for model in group.list %}<option value="{{ model.pk }}" {% if selected_model == model.pk|stringformat:'s' %}selected{% endif %}>{{ model.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+      <button class="button button-coral price-find" type="submit">Найти <span aria-hidden="true">↗</span></button>
+      {% if search_q or selected_model %}<a class="price-reset" href="{% url 'prices' %}#price-catalog">Сбросить фильтры <span aria-hidden="true">×</span></a>{% endif %}
     </form>
-
     {% if result %}
-
-      {% if search_q %}
-      <!-- ── Поиск: плоский список без аккордеона ── -->
-      {% for brand_group in result %}
-        <div class="search-brand-title">{{ brand_group.brand.icon }} {{ brand_group.brand.name }}</div>
-        {% for model_group in brand_group.models %}
-          <div class="search-model-title">{{ model_group.model.name }}</div>
-          <div style="background:#141414;border:1px solid #1e1e1e;border-radius:12px;overflow:hidden;margin-bottom:8px">
-            {% for service in model_group.services %}
-            <div class="svc-row">
-              <div>
-                <div class="svc-name">{{ service.name }}</div>
-                {% if service.duration %}<div class="svc-duration">⏱ {{ service.duration }}</div>{% endif %}
+      <div class="price-results-top"><p>{% if search_q %}По запросу «<strong>{{ search_q }}</strong>»{% elif selected_model %}Цены для выбранной модели{% else %}Выберите бренд и раскройте свою модель{% endif %}</p><button type="button" class="price-expand" data-price-expand hidden>Развернуть все модели <span aria-hidden="true">+</span></button></div>
+      <nav class="price-brand-nav" aria-label="Бренды в прайс-листе">{% for group in result %}<a href="#price-brand-{{ group.brand.pk }}" data-price-brand="price-brand-{{ group.brand.pk }}">{{ group.brand.name }} <span>{{ group.models|length }}</span></a>{% endfor %}</nav>
+      <div class="price-catalog-layout"><div class="price-results">
+        {% for brand_group in result %}
+        <details class="price-brand" id="price-brand-{{ brand_group.brand.pk }}" {% if forloop.first or search_q or selected_model %}open{% endif %}>
+          <summary><span class="price-brand-letter" aria-hidden="true">{{ brand_group.brand.name|first }}</span><span class="price-brand-name">{{ brand_group.brand.name }}<small>Моделей: {{ brand_group.models|length }}</small></span><span class="price-chevron" aria-hidden="true">↗</span></summary>
+          <div class="price-models">{% for model_group in brand_group.models %}
+            <details class="price-model" {% if search_q or selected_model or forloop.first and forloop.parentloop.first %}open{% endif %}>
+              <summary><span class="price-model-name">{{ model_group.model.name }}</span><span class="price-service-count">Услуг: {{ model_group.services|length }}</span><span class="price-plus" aria-hidden="true">+</span></summary>
+              <div class="price-services">
+                {% if model_group.services %}<div class="price-table-heading" aria-hidden="true"><span>Услуга / ориентир по времени</span><span>Стоимость</span><span></span></div>{% endif %}
+                {% for service in model_group.services %}
+                <article class="price-service"><div class="price-service-info"><h3>{{ service.name }}</h3>{% if service.description %}<p class="price-service-description">{{ service.description }}</p>{% endif %}{% if service.duration %}<p class="price-duration"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 4v4l2.5 1.5"></path></svg>{{ service.duration }}</p>{% endif %}</div><strong class="price-value">{{ service.price_display }}</strong><a class="price-service-link" href="{% url 'contacts' %}?device={{ model_group.model.full_name|urlencode }}&amp;service={{ service.name|urlencode }}#booking-form" aria-label="Записаться: {{ service.name }}, {{ model_group.model.full_name }}">Записаться <span aria-hidden="true">↗</span></a></article>
+                {% empty %}<p class="price-model-empty">Стоимость для этой модели уточняется. <a href="{% url 'contacts' %}#booking-form">Расскажите о поломке ↗</a></p>{% endfor %}
               </div>
-              <div class="svc-price">{{ service.price_display }}</div>
-            </div>
-            {% endfor %}
+            </details>{% endfor %}
           </div>
-        {% endfor %}
-      {% endfor %}
-
-      {% else %}
-      <!-- ── Аккордеон: бренд → модель ── -->
-      {% for brand_group in result %}
-      <div class="acc-brand">
-
-        <!-- Brand header -->
-        <div class="acc-brand-header" onclick="toggleBrand(this)"
-             {% if forloop.first %}{% endif %}>
-          <div style="display:flex;align-items:center;gap:12px">
-            <h2>{{ brand_group.brand.icon }} {{ brand_group.brand.name }}</h2>
-            <span class="acc-count">{{ brand_group.models|length }} моделей</span>
-          </div>
-          <span class="acc-chevron">▾</span>
-        </div>
-
-        <!-- Brand body -->
-        <div class="acc-brand-body {% if forloop.first %}open{% endif %}">
-          {% for model_group in brand_group.models %}
-          <div class="acc-model">
-
-            <!-- Model header -->
-            <div class="acc-model-header" onclick="toggleModel(this)">
-              <div style="display:flex;align-items:center;gap:8px">
-                <h3>{{ model_group.model.name }}</h3>
-                <span class="acc-svc-count">{{ model_group.services|length }} услуг</span>
-              </div>
-              <span class="acc-chevron">▾</span>
-            </div>
-
-            <!-- Model body -->
-            <div class="acc-model-body">
-              {% for service in model_group.services %}
-              <div class="svc-row">
-                <div>
-                  <div class="svc-name">{{ service.name }}</div>
-                  {% if service.duration %}<div class="svc-duration">⏱ {{ service.duration }}</div>{% endif %}
-                </div>
-                <div class="svc-price">{{ service.price_display }}</div>
-              </div>
-              {% endfor %}
-            </div>
-
-          </div>
-          {% endfor %}
-        </div>
-
-      </div>
-      {% endfor %}
-      {% endif %}
-
+        </details>{% endfor %}
+        <p class="price-disclaimer">Цены в каталоге — ориентир. Итоговая стоимость и сроки зависят от состояния устройства и выбранных комплектующих. Уточните детали перед ремонтом.</p>
+      </div><aside class="price-help" aria-labelledby="price-help-title"><span class="price-help-symbol" aria-hidden="true">↳</span><p class="eyebrow">РАЗБЕРЁМСЯ ВМЕСТЕ</p><h3 id="price-help-title">Не уверены,<br>что сломалось?</h3><p>Опишите, как ведёт себя телефон. Поможем сориентироваться и обсудим дальнейшие шаги.</p><a class="button button-light" href="{% url 'contacts' %}#booking-form">Спросить о ремонте <span aria-hidden="true">↗</span></a><div class="price-help-bottom"><span>На связи</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><small>{{ site.working_hours }}</small></div></aside></div>
     {% else %}
-    <div style="text-align:center;padding:72px 0;color:#666">
-      <div style="font-size:52px;margin-bottom:18px">🔍</div>
-      <h3 style="color:#fff;margin-bottom:8px;font-size:20px">Ничего не найдено</h3>
-      <p>Попробуйте другой запрос или <a href="{% url 'prices' %}" style="color:#f24a47">сбросьте фильтр</a></p>
-    </div>
+      <div class="price-empty"><span aria-hidden="true">⌕</span><h3>Пока не нашли совпадений.</h3><p>Попробуйте название модели без лишних слов или выберите другое устройство. Если вашей модели нет в каталоге, уточним стоимость лично.</p><div><a class="button button-coral" href="{% url 'prices' %}#price-catalog">Показать весь прайс <span aria-hidden="true">↗</span></a><a class="text-link" href="{% url 'contacts' %}#booking-form">Уточнить стоимость ↗</a></div></div>
     {% endif %}
-
-    <div class="prices-cta">
-      <h3>Не нашли свою модель?</h3>
-      <p>Оставьте заявку — мы уточним стоимость и свяжемся с вами</p>
-      <a href="{% url 'contacts' %}">Связаться с нами</a>
-    </div>
-  </div>
-</section>
+  </section>
+  <section class="price-next wrap" aria-labelledby="price-next-title"><div><p class="eyebrow">СЛЕДУЮЩИЙ ШАГ — ПРОСТОЙ</p><h2 id="price-next-title">Хорошим вещам —<br><span>долгую жизнь.</span></h2></div><div><p>Нашли нужную услугу или пока есть вопросы?<br>Свяжитесь с нами — начнём с вашего устройства.</p><a class="button button-coral" href="{% url 'contacts' %}#booking-form">Записаться на ремонт <span aria-hidden="true">↗</span></a><a class="price-next-about" href="{% url 'about' %}">Узнать о сервисе ↗</a></div></section>
+</div>
 {% endblock %}
-
-{% block extra_js %}
-<script>
-// Open first brand by default
-document.addEventListener('DOMContentLoaded', function () {
-  var firstHeader = document.querySelector('.acc-brand-header');
-  if (firstHeader) firstHeader.classList.add('open');
-});
-
-function toggleBrand(header) {
-  var body = header.nextElementSibling;
-  var isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  header.classList.toggle('open', !isOpen);
-}
-
-function toggleModel(header) {
-  var body = header.nextElementSibling;
-  var isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  header.classList.toggle('open', !isOpen);
-}
-</script>
-{% endblock %}
+{% block extra_js %}<script src="{% static 'core/js/prices.js' %}?v=20260920-1" defer></script>{% endblock %}

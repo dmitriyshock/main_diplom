@@ -1,112 +1,17 @@
 {% extends 'core/base.html' %}
+{% load static %}
 {% block title %}Контакты — {{ site.company_name }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/public-pages.css' %}?v=20260920-1">{% endblock %}
 {% block content %}
-
-<section class="page-hero">
-  <div class="container">
-    <h1>Контакты</h1>
-    <p>Мы всегда на связи</p>
-  </div>
+<section class="public-hero wrap" aria-labelledby="contacts-title"><div><p class="eyebrow">КОНТАКТЫ / {{ site.company_name|upper }}</p><h1 id="contacts-title">Давайте<br><span>будем на связи.</span></h1></div><div class="public-hero-aside"><p>О поломке, стоимости или дороге к нам.<br>Начнём с вашего вопроса.</p><a class="button button-coral" href="#booking-form">Обсудить ремонт <span aria-hidden="true">↗</span></a></div></section>
+<section class="public-contact-grid wrap" aria-labelledby="find-title">
+  <div class="public-contact-info"><p class="eyebrow">01 / ЗВОНИТЕ И ПРИХОДИТЕ</p><h2 id="find-title">Ваш сервис.<br>Рядом.</h2><a class="public-phone" href="tel:{{ site.phone }}">{{ site.phone }} <span aria-hidden="true">↗</span></a><dl class="public-details"><div><dt>Адрес</dt><dd>{{ site.actual_address|default:site.address }}</dd></div><div><dt>Режим работы</dt><dd>{{ site.working_hours }}</dd></div>{% if site.email %}<div><dt>Электронная почта</dt><dd><a href="mailto:{{ site.email }}">{{ site.email }}</a></dd></div>{% endif %}{% if site.whatsapp %}<div><dt>WhatsApp</dt><dd>{{ site.whatsapp }}</dd></div>{% endif %}{% if site.telegram %}<div><dt>ВКонтакте</dt><dd>{{ site.telegram }}</dd></div>{% endif %}</dl><div class="public-contact-actions">{% if site.telegram_bot_link and 'your_group_id' not in site.telegram_bot_link %}<a class="text-link" href="{{ site.telegram_bot_link }}" target="_blank" rel="noopener noreferrer">Написать в VK <span aria-hidden="true">↗</span></a>{% endif %}{% if site.telegram_channel %}<a class="text-link" href="{{ site.telegram_channel }}" target="_blank" rel="noopener noreferrer">Сообщество VK <span aria-hidden="true">↗</span></a>{% endif %}</div></div>
+  <div class="public-map" aria-label="Расположение сервиса">{% if site.yandex_map_embed %}{{ site.yandex_map_embed|safe }}{% elif site.google_map_embed %}{{ site.google_map_embed|safe }}{% else %}<div class="public-map-empty"><span aria-hidden="true">↗</span><p class="eyebrow">МЕСТО ВСТРЕЧИ</p><h3>{{ site.actual_address|default:site.address }}</h3><p>Подскажем удобный маршрут по телефону.<br>{{ site.working_hours }}</p><a class="text-link" href="tel:{{ site.phone }}">Позвонить в сервис <span aria-hidden="true">↗</span></a></div>{% endif %}</div>
 </section>
-
-<section class="section">
-  <div class="container contacts-grid">
-    <div>
-      <div class="contact-block card">
-        <h3>Как нас найти</h3>
-        <div class="contact-list">
-          <div class="contact-item">
-            <span>📍</span>
-            <div><strong>Адрес</strong><p>{{ site.actual_address|default:site.address }}</p></div>
-          </div>
-          <div class="contact-item">
-            <span>🕐</span>
-            <div><strong>Режим работы</strong><p>{{ site.working_hours }}</p></div>
-          </div>
-          <div class="contact-item">
-            <span>📞</span>
-            <div><strong>Телефон</strong><p><a href="tel:{{ site.phone }}">{{ site.phone }}</a></p></div>
-          </div>
-          {% if site.email %}
-          <div class="contact-item">
-            <span>✉️</span>
-            <div><strong>Email</strong><p><a href="mailto:{{ site.email }}">{{ site.email }}</a></p></div>
-          </div>
-          {% endif %}
-          {% if site.whatsapp %}
-          <div class="contact-item">
-            <span>💬</span>
-            <div><strong>WhatsApp</strong><p>{{ site.whatsapp }}</p></div>
-          </div>
-          {% endif %}
-          {% if site.telegram %}
-          <div class="contact-item">
-            <span>💙</span>
-            <div><strong>ВКонтакте</strong><p>{{ site.telegram }}</p></div>
-          </div>
-          {% endif %}
-        </div>
-
-        <div class="contact-actions">
-          {% if site.telegram_bot_link %}
-          <a href="{{ site.telegram_bot_link }}" target="_blank" class="btn btn-lg">Написать в ВКонтакте</a>
-          {% endif %}
-          {% if site.telegram_channel %}
-          <a href="{{ site.telegram_channel }}" target="_blank" class="btn btn-outline">Наше сообщество ВК</a>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="card" id="booking-form" style="margin-top:1.5rem">
-        <h3>Записаться на ремонт</h3>
-        <p style="color:var(--text-muted);font-size:.95rem;margin-bottom:1rem">Перезвоним в течение 15 минут</p>
-        <form action="{% url 'contact_request' %}" method="post" class="contact-form">
-          {% csrf_token %}
-          <input type="text" name="name" placeholder="Ваше имя" required>
-          <input type="text" name="phone" placeholder="+7 (999) 000-00-00" required data-phone>
-          <input type="text" name="device" placeholder="Устройство (напр. iPhone 14, Samsung S22)">
-          <textarea name="message" placeholder="Опишите проблему" rows="3"></textarea>
-          {% if branches %}
-          <select name="branch_id" style="width:100%;padding:10px 14px;border-radius:10px;background:#1e293b;border:1px solid #334155;color:#cbd5e1;font-size:15px;">
-            <option value="">Выбрать филиал (необязательно)</option>
-            {% for b in branches %}
-            <option value="{{ b.pk }}">{{ b.name }}{% if b.address %} — {{ b.address }}{% endif %}</option>
-            {% endfor %}
-          </select>
-          {% endif %}
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.875rem;color:var(--text-muted);line-height:1.5">
-            <input type="checkbox" name="pd_consent" required
-                   style="margin-top:3px;flex-shrink:0;accent-color:#f24a47;width:16px;height:16px;cursor:pointer">
-            <span>Я согласен на обработку персональных данных в соответствии с ФЗ-152 «О персональных данных»</span>
-          </label>
-          <button type="submit" class="btn btn-lg" style="width:100%">Записаться</button>
-        </form>
-      </div>
-
-      {% if site.inn or site.ogrn %}
-      <div class="card" style="margin-top:1.5rem;font-size:.9rem">
-        <h4 style="font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;opacity:.5">Реквизиты</h4>
-        <div style="display:grid;gap:.35rem">
-          {% if site.company_name %}<div><strong>Компания:</strong> {{ site.company_name }}</div>{% endif %}
-          {% if site.director_name %}<div><strong>Директор:</strong> {{ site.director_name }}</div>{% endif %}
-          {% if site.inn %}<div><strong>ИНН:</strong> {{ site.inn }}</div>{% endif %}
-          {% if site.ogrn %}<div><strong>ОГРН(ИП):</strong> {{ site.ogrn }}</div>{% endif %}
-          {% if site.legal_address %}<div><strong>Юр. адрес:</strong> {{ site.legal_address }}</div>{% endif %}
-          {% if site.email %}<div><strong>Email:</strong> <a href="mailto:{{ site.email }}">{{ site.email }}</a></div>{% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-    </div>
-
-    <div class="contacts-map">
-      {% if site.yandex_map_embed %}{{ site.yandex_map_embed|safe }}
-      {% elif site.google_map_embed %}{{ site.google_map_embed|safe }}
-      {% else %}
-        <div class="map-placeholder"><span>🗺</span><p>Карта появится после настройки в панели управления</p></div>
-      {% endif %}
-    </div>
-  </div>
+{% if branches %}<section class="public-branches wrap" aria-labelledby="branches-title"><div class="public-section-heading"><p class="eyebrow">ВЫБЕРИТЕ УДОБНЫЙ АДРЕС</p><h2 id="branches-title">Наши сервисы</h2></div><div class="public-branch-grid">{% for branch in branches %}<article class="public-branch"><span class="public-branch-index">{% if forloop.counter < 10 %}0{% endif %}{{ forloop.counter }}</span><h3>{{ branch.name }}</h3>{% if branch.address %}<p>{{ branch.address }}</p>{% endif %}{% if branch.phone %}<a href="tel:{{ branch.phone }}">{{ branch.phone }} ↗</a>{% endif %}{% if branch.email %}<a href="mailto:{{ branch.email }}">{{ branch.email }}</a>{% endif %}</article>{% endfor %}</div></section>{% endif %}
+<section class="public-booking wrap" id="booking-form" aria-labelledby="booking-title">
+  <div class="public-booking-copy"><p class="eyebrow">02 / ПЕРВЫЙ ШАГ К РЕМОНТУ</p><h2 id="booking-title">Расскажите,<br>что <span>случилось.</span></h2><p>Оставьте контакты и пару слов об устройстве. Свяжемся с вами в рабочее время, уточним детали и подберём удобное время.</p><div class="public-booking-note"><span aria-hidden="true">↳</span><p>Не знаете название поломки?<br>Опишите своими словами. Разберёмся вместе.</p></div></div>
+  <div class="public-form-panel"><h3>Записаться на ремонт</h3><p>Поля со звёздочкой обязательны.</p><form action="{% url 'contact_request' %}" method="post" class="public-form">{% csrf_token %}<div class="public-form-row"><label for="contact-name">Ваше имя <span>*</span><input id="contact-name" type="text" name="name" autocomplete="name" maxlength="200" placeholder="Как к вам обращаться" required></label><label for="contact-phone">Телефон или VK <span>*</span><input id="contact-phone" type="text" name="phone" autocomplete="tel" maxlength="30" placeholder="+7 или ссылка на профиль" required></label></div><label for="contact-device">Модель устройства<input id="contact-device" type="text" name="device" maxlength="200" value="{{ request.GET.device }}" placeholder="Например, iPhone 14"></label><label for="contact-message">Что случилось?<textarea id="contact-message" name="message" rows="4" maxlength="5000" placeholder="Разбит экран, быстро садится батарея…">{{ request.GET.service }}</textarea></label>{% if branches %}<label for="contact-branch">Удобный сервис<select id="contact-branch" name="branch_id"><option value="">Помогите выбрать филиал</option>{% for branch in branches %}<option value="{{ branch.pk }}">{{ branch.name }}{% if branch.address %} — {{ branch.address }}{% endif %}</option>{% endfor %}</select></label>{% endif %}<label class="public-consent" for="contact-consent"><input id="contact-consent" type="checkbox" name="pd_consent" required><span>Я согласен на обработку персональных данных для ответа на заявку. <a href="{% url 'personal_data' %}">Согласие на обработку данных</a></span></label><button type="submit" class="button button-coral">Отправить заявку <span aria-hidden="true">↗</span></button></form></div>
 </section>
-
+{% if site.inn or site.ogrn or site.kpp or site.director_name or site.legal_address %}<section class="public-legal wrap" aria-labelledby="requisites-title"><p class="eyebrow">ИНФОРМАЦИЯ О КОМПАНИИ</p><h2 id="requisites-title">Реквизиты</h2><dl class="public-legal-grid"><div><dt>Компания</dt><dd>{{ site.company_name }}</dd></div>{% if site.director_name %}<div><dt>Директор</dt><dd>{{ site.director_name }}</dd></div>{% endif %}{% if site.inn %}<div><dt>ИНН</dt><dd>{{ site.inn }}</dd></div>{% endif %}{% if site.ogrn %}<div><dt>ОГРН / ОГРНИП</dt><dd>{{ site.ogrn }}</dd></div>{% endif %}{% if site.kpp %}<div><dt>КПП</dt><dd>{{ site.kpp }}</dd></div>{% endif %}{% if site.legal_address %}<div><dt>Юридический адрес</dt><dd>{{ site.legal_address }}</dd></div>{% endif %}{% if site.email %}<div><dt>Электронная почта</dt><dd><a href="mailto:{{ site.email }}">{{ site.email }}</a></dd></div>{% endif %}</dl></section>{% endif %}
 {% endblock %}

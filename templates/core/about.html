@@ -1,65 +1,23 @@
 {% extends 'core/base.html' %}
-{% block title %}О нас — {{ site.company_name }}{% endblock %}
+{% load static %}
+{% block title %}О сервисе — {{ site.company_name }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/public-pages.css' %}?v=20260920-1">{% endblock %}
 {% block content %}
-
-<section class="page-hero">
-  <div class="container">
-    <h1>О компании</h1>
-    <p>{{ site.tagline }}</p>
-  </div>
+<section class="public-hero wrap" aria-labelledby="about-title">
+  <div><p class="eyebrow">О СЕРВИСЕ / {{ site.company_name|upper }}</p><h1 id="about-title">Хорошим вещам —<br><span>долгую жизнь.</span></h1></div>
+  <div class="public-hero-aside"><p>{{ site.tagline }}</p><a class="text-link" href="{% url 'contacts' %}#booking-form">Познакомимся поближе <span aria-hidden="true">↗</span></a></div>
 </section>
-
-<section class="section">
-  <div class="container about-grid">
-    <div class="about-text">
-      <h2>{{ site.company_name }}</h2>
-      <p>{{ site.about_full_text|default:site.about_text }}</p>
-
-      <div class="about-facts">
-        <div class="fact"><span>📍</span><p>{{ site.actual_address|default:site.address }}</p></div>
-        <div class="fact"><span>🕐</span><p>{{ site.working_hours }}</p></div>
-        <div class="fact"><span>📞</span><p><a href="tel:{{ site.phone }}">{{ site.phone }}</a></p></div>
-        <div class="fact"><span>🛡</span><p>Гарантия {{ site.warranty_days }} дней</p></div>
-        {% if site.email %}
-        <div class="fact"><span>✉️</span><p><a href="mailto:{{ site.email }}">{{ site.email }}</a></p></div>
-        {% endif %}
-        {% if site.website %}
-        <div class="fact"><span>🌐</span><p><a href="{{ site.website }}" target="_blank">{{ site.website }}</a></p></div>
-        {% endif %}
-      </div>
-
-      {% if site.telegram_bot_link %}
-      <a href="{{ site.telegram_bot_link }}" target="_blank" class="btn btn-lg" style="margin-top:1rem">Написать в ВКонтакте</a>
-      {% endif %}
-
-      {% if site.inn or site.ogrn or site.director_name %}
-      <div class="card" style="margin-top:2rem;padding:1.25rem;font-size:.9rem">
-        <h4 style="font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.85rem;opacity:.45;font-weight:600">Юридическая информация</h4>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.45rem .75rem">
-          {% if site.director_name %}<div><strong>Директор:</strong> {{ site.director_name }}</div>{% endif %}
-          {% if site.inn %}<div><strong>ИНН:</strong> {{ site.inn }}</div>{% endif %}
-          {% if site.ogrn %}<div><strong>ОГРН(ИП):</strong> {{ site.ogrn }}</div>{% endif %}
-          {% if site.kpp %}<div><strong>КПП:</strong> {{ site.kpp }}</div>{% endif %}
-          {% if site.legal_address %}<div style="grid-column:1/-1"><strong>Юр. адрес:</strong> {{ site.legal_address }}</div>{% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-    </div>
-
-    <div class="about-map">
-      {% if site.yandex_map_embed %}
-        {{ site.yandex_map_embed|safe }}
-      {% elif site.google_map_embed %}
-        {{ site.google_map_embed|safe }}
-      {% else %}
-        <div class="map-placeholder">
-          <span>🗺</span>
-          <p>Карта появится после настройки в панели управления</p>
-        </div>
-      {% endif %}
-    </div>
-  </div>
+<section class="public-story wrap" aria-labelledby="story-title">
+  <div class="public-story-copy"><p class="eyebrow">01 / НАША ИСТОРИЯ</p><h2 id="story-title">На вашей стороне.<br>И на стороне<br>вашего устройства.</h2><div class="public-prose">{{ site.about_full_text|default:site.about_text|linebreaks }}</div><a class="button button-coral" href="{% url 'prices' %}">Услуги и цены <span aria-hidden="true">↗</span></a></div>
+  <aside class="public-warranty" aria-label="Гарантия на ремонт"><span class="public-warranty-mark" aria-hidden="true">↗</span><p class="eyebrow">ЗАБОТА ПРОДОЛЖАЕТСЯ</p><p class="public-warranty-number">{{ site.warranty_days }}<span>дней</span></p><h3>Гарантия после ремонта</h3><p>Условия для выполненных работ и установленных деталей уточним при оформлении ремонта.</p><span class="public-warranty-foot">{{ site.company_name|upper }} / СЕРВИС ДЛЯ ВАШИХ УСТРОЙСТВ</span></aside>
 </section>
-
+<section class="public-principles wrap" aria-labelledby="principles-title">
+  <div class="public-section-heading"><p class="eyebrow">02 / НАШ ПОДХОД</p><h2 id="principles-title">Всё по делу.<br>Всё по-человечески.</h2></div>
+  <div class="public-principle-grid"><article><span>01</span><h3>Сначала разберёмся</h3><p>Расскажите, что случилось. Уточним модель устройства и поможем определить следующий шаг.</p></article><article><span>02</span><h3>Обсудим детали</h3><p>Стоимость, сроки и необходимые работы согласуем после проверки устройства.</p></article><article><span>03</span><h3>Останемся на связи</h3><p>Ответим на вопросы о ремонте, использовании устройства и гарантийном обслуживании.</p></article></div>
+</section>
+<section class="public-visit wrap" aria-labelledby="visit-title">
+  <div><p class="eyebrow">03 / ЗАГЛЯДЫВАЙТЕ</p><h2 id="visit-title">Здесь возвращают<br>в рабочий ритм.</h2><dl class="public-details"><div><dt>Адрес</dt><dd>{{ site.actual_address|default:site.address }}</dd></div><div><dt>Режим работы</dt><dd>{{ site.working_hours }}</dd></div><div><dt>Телефон</dt><dd><a href="tel:{{ site.phone }}">{{ site.phone }}</a></dd></div>{% if site.email %}<div><dt>Электронная почта</dt><dd><a href="mailto:{{ site.email }}">{{ site.email }}</a></dd></div>{% endif %}{% if site.website %}<div><dt>Сайт</dt><dd><a href="{{ site.website }}" target="_blank" rel="noopener noreferrer">{{ site.website }} ↗</a></dd></div>{% endif %}</dl><a class="text-link" href="{% url 'contacts' %}">Все контакты и запись <span aria-hidden="true">↗</span></a>{% if site.telegram_bot_link and 'your_group_id' not in site.telegram_bot_link %}<a class="text-link public-secondary-link" href="{{ site.telegram_bot_link }}" target="_blank" rel="noopener noreferrer">Написать в VK <span aria-hidden="true">↗</span></a>{% endif %}</div>
+  <div class="public-map" aria-label="Расположение сервиса">{% if site.yandex_map_embed %}{{ site.yandex_map_embed|safe }}{% elif site.google_map_embed %}{{ site.google_map_embed|safe }}{% else %}<div class="public-map-empty"><span aria-hidden="true">↗</span><p class="eyebrow">ДО ВСТРЕЧИ В СЕРВИСЕ</p><h3>{{ site.actual_address|default:site.address }}</h3><p>Позвоните — подскажем, как добраться.</p><a class="text-link" href="tel:{{ site.phone }}">{{ site.phone }}</a></div>{% endif %}</div>
+</section>
+{% if site.inn or site.ogrn or site.director_name or site.kpp or site.legal_address %}<section class="public-legal wrap" aria-labelledby="legal-title"><p class="eyebrow">ОТКРЫТО О КОМПАНИИ</p><h2 id="legal-title">Реквизиты</h2><dl class="public-legal-grid">{% if site.director_name %}<div><dt>Директор</dt><dd>{{ site.director_name }}</dd></div>{% endif %}{% if site.inn %}<div><dt>ИНН</dt><dd>{{ site.inn }}</dd></div>{% endif %}{% if site.ogrn %}<div><dt>ОГРН / ОГРНИП</dt><dd>{{ site.ogrn }}</dd></div>{% endif %}{% if site.kpp %}<div><dt>КПП</dt><dd>{{ site.kpp }}</dd></div>{% endif %}{% if site.legal_address %}<div><dt>Юридический адрес</dt><dd>{{ site.legal_address }}</dd></div>{% endif %}</dl></section>{% endif %}
 {% endblock %}

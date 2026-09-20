@@ -1,61 +1,96 @@
-// Burger menu
-const burger = document.getElementById('burger');
-const navLinks = document.getElementById('navLinks');
-if (burger && navLinks) {
-  burger.addEventListener('click', () => {
-    navLinks.classList.toggle('open');
-    burger.classList.toggle('open');
-  });
-  // Закрытие при клике на ссылку внутри меню
-  navLinks.querySelectorAll('a').forEach(link => {
-    link.addEventListener('click', () => {
-      navLinks.classList.remove('open');
-      burger.classList.remove('open');
-    });
-  });
-  // Закрытие при клике вне меню
-  document.addEventListener('click', (e) => {
-    if (!burger.contains(e.target) && !navLinks.contains(e.target)) {
-      navLinks.classList.remove('open');
-      burger.classList.remove('open');
+(() => {
+  'use strict';
+
+  const root = document.documentElement;
+  const toggle = document.querySelector('[data-theme-toggle]');
+  const themeLabel = toggle?.querySelector('[data-theme-label]');
+  const themeColor = document.getElementById('themeColor');
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  const readSavedTheme = () => {
+    try { return localStorage.getItem('kayros-theme'); } catch (error) { return null; }
+  };
+  const saveTheme = (theme) => {
+    try { localStorage.setItem('kayros-theme', theme); } catch (error) { /* Theme still works for this page. */ }
+  };
+
+  const applyTheme = (theme) => {
+    const isDark = theme === 'dark';
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    if (toggle) {
+      toggle.setAttribute('aria-pressed', String(isDark));
+      toggle.setAttribute('aria-label', isDark ? 'Включить светлую тему' : 'Включить тёмную тему');
     }
+    if (themeLabel) themeLabel.textContent = isDark ? 'Светлая' : 'Тёмная';
+    if (themeColor) themeColor.setAttribute('content', isDark ? '#111411' : '#f6f5f0');
+  };
+
+  applyTheme(root.dataset.theme || (systemTheme.matches ? 'dark' : 'light'));
+
+  toggle?.addEventListener('click', () => {
+    const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    saveTheme(nextTheme);
+    applyTheme(nextTheme);
   });
-}
 
-// Scroll animations
-const animEls = document.querySelectorAll('[data-animate]');
-if (animEls.length) {
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
-  }, { threshold: 0.1 });
-  animEls.forEach(el => obs.observe(el));
-}
+  systemTheme.addEventListener?.('change', (event) => {
+    if (!readSavedTheme()) applyTheme(event.matches ? 'dark' : 'light');
+  });
 
-// Auto-dismiss alerts
-document.querySelectorAll('.alert').forEach(el => {
-  setTimeout(() => el.style.opacity = '0', 4000);
-  setTimeout(() => el.remove(), 4500);
-});
+  const menu = document.querySelector('.menu-toggle');
+  const navigation = document.getElementById('navigation');
+  const closeMenu = () => {
+    if (!menu || !navigation) return;
+    navigation.classList.remove('open');
+    menu.setAttribute('aria-expanded', 'false');
+    menu.setAttribute('aria-label', 'Открыть меню');
+    document.body.classList.remove('menu-open');
+  };
 
-// Ajax form submission for hero form
-const heroForm = document.getElementById('heroForm');
-if (heroForm) {
-  heroForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = heroForm.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Отправляем...';
-    const res = await fetch(heroForm.action, {
-      method: 'POST',
-      body: new FormData(heroForm),
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  if (menu && navigation) {
+    menu.addEventListener('click', () => {
+      const isOpen = navigation.classList.toggle('open');
+      menu.setAttribute('aria-expanded', String(isOpen));
+      menu.setAttribute('aria-label', isOpen ? 'Закрыть меню' : 'Открыть меню');
+      document.body.classList.toggle('menu-open', isOpen);
     });
-    const data = await res.json();
-    if (data.ok) {
-      heroForm.style.display = 'none';
-      document.getElementById('formSuccess').style.display = 'block';
-    } else {
-      btn.disabled = false; btn.textContent = 'Отправить заявку';
-      alert(data.error || 'Ошибка, попробуйте снова');
-    }
+    navigation.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+    document.addEventListener('click', (event) => {
+      if (!navigation.contains(event.target) && !menu.contains(event.target)) closeMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && navigation.classList.contains('open')) {
+        closeMenu();
+        menu.focus();
+      }
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 900) closeMenu();
+    });
+  }
+
+  const applyPhoneMask = (input) => {
+    const format = (raw) => {
+      let digits = raw.replace(/\D/g, '');
+      if (digits.charAt(0) === '8') digits = `7${digits.slice(1)}`;
+      if (digits.length && digits.charAt(0) !== '7') digits = `7${digits}`;
+      digits = digits.slice(0, 11);
+      if (!digits.length) return '';
+      let result = '+7';
+      if (digits.length >= 2) result += ` (${digits.slice(1, Math.min(4, digits.length))}`;
+      if (digits.length >= 4) result += `) ${digits.slice(4, Math.min(7, digits.length))}`;
+      if (digits.length >= 7) result += `-${digits.slice(7, Math.min(9, digits.length))}`;
+      if (digits.length >= 9) result += `-${digits.slice(9, 11)}`;
+      return result;
+    };
+    input.addEventListener('input', () => { input.value = format(input.value); });
+    input.addEventListener('focus', () => { if (!input.value) input.value = '+7 ('; });
+    input.addEventListener('blur', () => { if (input.value === '+7 (' || input.value === '+7') input.value = ''; });
+  };
+  document.querySelectorAll('[data-phone]').forEach(applyPhoneMask);
+
+  document.querySelectorAll('.message').forEach((message) => {
+    window.setTimeout(() => message.classList.add('message-leaving'), 4200);
+    window.setTimeout(() => message.remove(), 4700);
   });
-}
+})();

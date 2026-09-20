@@ -1,0 +1,38 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block title %}{{ document.title }} — {{ site.company_name }}{% endblock %}
+{% block meta_description %}{{ document.lead }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/legal.css' %}?v=20260920-1">{% endblock %}
+{% block content %}
+<section class="legal-hero wrap" aria-labelledby="legal-title">
+  <div>
+    <p class="eyebrow">{{ document.eyebrow }}</p>
+    <h1 id="legal-title">{{ document.title }}</h1>
+  </div>
+  <div class="legal-lead">
+    <span class="legal-status">Черновик документа</span>
+    <p>{{ document.lead }}</p>
+  </div>
+</section>
+
+<section class="legal-content wrap">
+  <aside class="legal-aside">
+    <p>Редакция от {% now 'd.m.Y' %}</p>
+    <p>Эта страница подготовлена как информационная заглушка. Перед коммерческим запуском текст и реквизиты оператора необходимо проверить с юристом.</p>
+    <a class="text-link" href="{% url 'contacts' %}">Контакты сервиса <span aria-hidden="true">↗</span></a>
+  </aside>
+  <div class="legal-sections">
+    {% for heading, text in document.sections %}
+    <article>
+      <span>0{{ forloop.counter }}</span>
+      <div><h2>{{ heading }}</h2><p>{{ text }}</p></div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="legal-next wrap">
+  <p>Есть вопрос по данным или условиям?</p>
+  <a class="button button-coral" href="{% url 'contacts' %}">Связаться с Kayros <span aria-hidden="true">↗</span></a>
+</section>
+{% endblock %}
