@@ -19,7 +19,7 @@
       document.documentElement.dataset.theme = theme;
     }());
   </script>
-  <link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260920-1">
+  <link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260920-2">
   {% block extra_css %}{% endblock %}
 </head>
 <body class="{% block body_class %}public-page{% endblock %}">
@@ -100,7 +100,15 @@
   </div>
 </footer>
 
-<script src="{% static 'core/js/main.js' %}?v=20260920-1" defer></script>
+<aside class="cookie-notice" data-cookie-notice role="region" aria-label="Уведомление об использовании cookie" hidden>
+  <div class="cookie-notice-copy">
+    <span class="cookie-notice-mark" aria-hidden="true">◉</span>
+    <p><strong>Этот сайт использует технические cookie.</strong> Они защищают формы, а выбранная тема сохраняется в браузере. <a href="{% url 'cookies' %}">Подробнее</a></p>
+  </div>
+  <button class="cookie-notice-button" type="button" data-cookie-accept>Понятно</button>
+</aside>
+
+<script src="{% static 'core/js/main.js' %}?v=20260920-2" defer></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

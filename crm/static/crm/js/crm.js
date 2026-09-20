@@ -1,78 +1,96 @@
-// Toast auto-dismiss
-document.querySelectorAll('.toast').forEach(t => {
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 4000);
-});
+/* Shared CRM behaviours. Each initializer is guarded for pages that do not use it. */
+(function () {
+  'use strict';
 
-// Mobile sidebar toggle
-const burger = document.getElementById('sidebarToggle');
-const sidebar = document.getElementById('crmSidebar');
-if (burger && sidebar) {
-  burger.addEventListener('click', () => sidebar.classList.toggle('open'));
-}
+  function applyPhoneMask(element) {
+    function formatPhone(rawValue) {
+      var digits = rawValue.replace(/\D/g, '');
+      if (digits.charAt(0) === '8') digits = '7' + digits.slice(1);
+      if (digits.length && digits.charAt(0) !== '7') digits = '7' + digits;
+      digits = digits.slice(0, 11);
 
-// Brand → Model cascade in repair create form
-const brandSel = document.getElementById('id_brand');
-const modelSel = document.getElementById('id_phone_model');
-if (brandSel && modelSel) {
-  brandSel.addEventListener('change', function() {
-    const brandId = this.value;
-    if (!brandId) { modelSel.innerHTML = '<option value="">— выберите модель —</option>'; return; }
-    fetch(`/api/models/${brandId}/`)
-      .then(r => r.json())
-      .then(data => {
-        modelSel.innerHTML = '<option value="">— выберите модель —</option>';
-        data.models.forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.id; opt.textContent = m.name;
-          modelSel.appendChild(opt);
-        });
-      });
-  });
-}
+      var result = digits.length ? '+7' : '';
+      if (digits.length >= 2) result += ' (' + digits.slice(1, Math.min(4, digits.length));
+      if (digits.length >= 4) result += ') ' + digits.slice(4, Math.min(7, digits.length));
+      if (digits.length >= 7) result += '-' + digits.slice(7, Math.min(9, digits.length));
+      if (digits.length >= 9) result += '-' + digits.slice(9, 11);
+      return result;
+    }
 
-// Part brand→model cascade in warehouse form
-const partBrandSel = document.getElementById('id_part_brand');
-const partModelSel = document.getElementById('id_part_model');
-if (partBrandSel && partModelSel) {
-  partBrandSel.addEventListener('change', function() {
-    const brandId = this.value;
-    partModelSel.innerHTML = '<option value="">— все модели —</option>';
+    element.addEventListener('input', function () { this.value = formatPhone(this.value); });
+    element.addEventListener('focus', function () { if (!this.value) this.value = '+7 ('; });
+    element.addEventListener('blur', function () {
+      if (this.value === '+7 (' || this.value === '+7') this.value = '';
+    });
+    element.addEventListener('keydown', function (event) {
+      if (event.key === 'Backspace' && (this.value === '+7 (' || this.value === '+7')) {
+        this.value = '';
+        event.preventDefault();
+      }
+    });
+  }
+
+  function populateModels(brandId, modelSelect, emptyLabel) {
+    modelSelect.innerHTML = '<option value="">' + emptyLabel + '</option>';
     if (!brandId) return;
-    fetch(`/api/models/${brandId}/`)
-      .then(r => r.json())
-      .then(data => {
-        data.models.forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.id; opt.textContent = m.name;
-          partModelSel.appendChild(opt);
+
+    fetch('/api/models/' + encodeURIComponent(brandId) + '/')
+      .then(function (response) { return response.ok ? response.json() : Promise.reject(response); })
+      .then(function (data) {
+        (data.models || []).forEach(function (model) {
+          var option = document.createElement('option');
+          option.value = model.id;
+          option.textContent = model.name;
+          modelSelect.appendChild(option);
         });
+      })
+      .catch(function () {
+        /* Leave the safe empty choice when a temporary API failure occurs. */
       });
-  });
-}
+  }
 
-// Confirm dangerous actions
-document.querySelectorAll('[data-confirm]').forEach(el => {
-  el.addEventListener('click', function(e) {
-    if (!confirm(this.dataset.confirm)) e.preventDefault();
-  });
-});
+  function initializeCascade(brandId, modelId, emptyLabel) {
+    var brandSelect = document.getElementById(brandId);
+    var modelSelect = document.getElementById(modelId);
+    if (!brandSelect || !modelSelect) return;
+    brandSelect.addEventListener('change', function () {
+      populateModels(this.value, modelSelect, emptyLabel);
+    });
+  }
 
-// Service price auto-fill from select
-const svcSelect = document.getElementById('service_select');
-const svcPrice = document.getElementById('service_price');
-if (svcSelect && svcPrice) {
-  svcSelect.addEventListener('change', function() {
-    const opt = this.options[this.selectedIndex];
-    if (opt.dataset.price) svcPrice.value = opt.dataset.price;
-  });
-}
+  function initializeAutoFill(selectId, fieldId) {
+    var select = document.getElementById(selectId);
+    var field = document.getElementById(fieldId);
+    if (!select || !field) return;
+    select.addEventListener('change', function () {
+      var option = this.options[this.selectedIndex];
+      if (option && option.dataset.price) field.value = option.dataset.price;
+    });
+  }
 
-// Part price auto-fill
-const partSelect = document.getElementById('part_select');
-const partPrice = document.getElementById('part_price');
-if (partSelect && partPrice) {
-  partSelect.addEventListener('change', function() {
-    const opt = this.options[this.selectedIndex];
-    if (opt.dataset.price) partPrice.value = opt.dataset.price;
+  function initializePage() {
+    document.querySelectorAll('[data-phone]').forEach(applyPhoneMask);
+    document.querySelectorAll('.toast').forEach(function (toast) {
+      window.setTimeout(function () {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity .3s';
+        window.setTimeout(function () { toast.remove(); }, 300);
+      }, 4000);
+    });
+    document.querySelectorAll('[data-confirm]').forEach(function (element) {
+      element.addEventListener('click', function (event) {
+        if (!window.confirm(this.dataset.confirm)) event.preventDefault();
+      });
+    });
+
+    initializeCascade('id_brand', 'id_phone_model', '— выберите модель —');
+    initializeCascade('id_part_brand', 'id_part_model', '— все модели —');
+    initializeAutoFill('service_select', 'service_price');
+    initializeAutoFill('part_select', 'part_price');
+  }
+
+  document.body.addEventListener('htmx:configRequest', function (event) {
+    if (window.crmCsrfToken) event.detail.headers['X-CSRFToken'] = window.crmCsrfToken;
   });
-}
+  document.addEventListener('DOMContentLoaded', initializePage);
+}());

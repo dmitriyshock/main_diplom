@@ -1,10 +1,37 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Kayros CRM{% endblock %}</title>
 {% if site.logo %}<link rel="icon" href="{{ site.logo.url }}">{% endif %}
+
+<script>
+  (function () {
+    var storedTheme = null;
+    try { storedTheme = localStorage.getItem('kayros-crm-theme'); } catch (error) { /* Storage can be disabled. */ }
+    var theme = storedTheme === 'dark' || storedTheme === 'light'
+      ? storedTheme
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }());
+
+  function crmShell() {
+    return {
+      sidebarOpen: true,
+      mobileOpen: false,
+      theme: document.documentElement.dataset.theme || 'light',
+      toggleTheme: function () {
+        this.theme = this.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = this.theme;
+        document.documentElement.classList.toggle('dark', this.theme === 'dark');
+        try { localStorage.setItem('kayros-crm-theme', this.theme); } catch (error) { /* Storage can be disabled. */ }
+      }
+    };
+  }
+</script>
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -27,40 +54,14 @@ tailwind.config = {
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
-
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: 'Inter', system-ui, sans-serif; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #020617; }
-  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #475569; }
-  .sidebar-link { transition: all 0.15s ease; }
-  .sidebar-link:hover { background: rgba(99,102,241,0.12); color: #a5b4fc; }
-  .sidebar-link.active { background: rgba(99,102,241,0.18); color: #a5b4fc; font-weight: 600; border-left-color: #6366f1 !important; }
-  .card { background: #0f172a; border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; }
-  .btn-primary { background: #6366f1; color: #fff; border-radius: 8px; font-weight: 500; transition: background 0.15s; cursor: pointer; }
-  .btn-primary:hover { background: #4f46e5; }
-  .btn-secondary { background: rgba(148,163,184,0.1); color: #cbd5e1; border-radius: 8px; font-weight: 500; transition: background 0.15s; cursor: pointer; }
-  .btn-secondary:hover { background: rgba(148,163,184,0.18); }
-  .btn-danger { background: rgba(239,68,68,0.15); color: #fca5a5; border-radius: 8px; font-weight: 500; transition: background 0.15s; cursor: pointer; }
-  .btn-danger:hover { background: rgba(239,68,68,0.25); }
-  .input-dark { background: #1e293b; border: 1px solid rgba(148,163,184,0.15); color: #f1f5f9; border-radius: 8px; }
-  .input-dark:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
-  .input-dark::placeholder { color: #64748b; }
-  select.input-dark option { background: #1e293b; }
-  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid; letter-spacing: 0.02em; }
-  .table-row:hover { background: rgba(148,163,184,0.035); }
-  .modal-overlay { backdrop-filter: blur(4px); background: rgba(2,6,23,0.75); }
-  [x-cloak] { display: none !important; }
-</style>
+<link rel="stylesheet" href="{% static 'crm/css/crm.css' %}?v=20260921-1">
 {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen" x-data="{ sidebarOpen: true, mobileOpen: false }">
+<body class="crm-body min-h-screen" x-data="crmShell()" @keydown.escape.window="mobileOpen = false">
 
 <!-- MOBILE OVERLAY -->
-<div x-show="mobileOpen" x-cloak @click="mobileOpen = false"
-     class="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"></div>
+<div x-show="mobileOpen" x-cloak @click="mobileOpen = false" aria-hidden="true"
+     class="crm-mobile-overlay fixed inset-0 z-40 lg:hidden backdrop-blur-sm"></div>
 
 <!-- MOBILE DRAWER -->
 <aside x-show="mobileOpen" x-cloak
@@ -70,7 +71,7 @@ tailwind.config = {
        x-transition:leave="transition ease-in duration-150"
        x-transition:leave-start="translate-x-0"
        x-transition:leave-end="-translate-x-full"
-       class="fixed left-0 top-0 h-screen w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-50 lg:hidden overflow-y-auto">
+       class="crm-mobile-drawer fixed left-0 top-0 h-screen w-72 flex flex-col z-50 lg:hidden overflow-y-auto" aria-label="Основная навигация">
   <div class="flex items-center justify-between px-4 py-[14px] border-b border-slate-800 min-h-[60px]">
     <div class="flex items-center gap-3">
       {% if site.logo %}
@@ -84,7 +85,7 @@ tailwind.config = {
       {% endif %}
       <span class="font-bold text-white text-lg tracking-tight">{{ site.company_name }}</span>
     </div>
-    <button @click="mobileOpen = false" class="text-slate-400 hover:text-white p-1">
+    <button type="button" @click="mobileOpen = false" class="crm-icon-button p-1" aria-label="Закрыть меню">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
@@ -128,10 +129,12 @@ tailwind.config = {
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       <span class="text-sm">Аналитика</span>
     </a>
+    {% if is_admin %}
     <a href="{% url 'crm:employee_list' %}" @click="mobileOpen=false" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 border-l-2 border-transparent {% if 'employee' in request.resolver_match.url_name %}active{% endif %}">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
       <span class="text-sm">Сотрудники</span>
     </a>
+    {% endif %}
     {% endif %}
     <a href="{% url 'crm:price_list' %}" @click="mobileOpen=false" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 border-l-2 border-transparent {% if request.resolver_match.url_name == 'price_list' %}active{% endif %}">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
@@ -170,7 +173,7 @@ tailwind.config = {
 
 <!-- SIDEBAR (desktop) -->
 <aside :class="sidebarOpen ? 'w-60' : 'w-16'"
-       class="fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 flex flex-col z-40 transition-all duration-200 hidden lg:flex overflow-hidden">
+       class="crm-sidebar fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-200 hidden lg:flex overflow-hidden" aria-label="Основная навигация">
 
   <div class="flex items-center gap-3 px-4 py-[14px] border-b border-slate-800 min-h-[60px]">
     {% if site.logo %}
@@ -262,11 +265,13 @@ tailwind.config = {
       <span x-show="sidebarOpen" class="text-sm whitespace-nowrap">Аналитика</span>
     </a>
 
+    {% if is_admin %}
     <a href="{% url 'crm:employee_list' %}"
        class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 border-l-2 border-transparent {% if 'employee' in request.resolver_match.url_name %}active{% endif %}">
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
       <span x-show="sidebarOpen" class="text-sm whitespace-nowrap">Сотрудники</span>
     </a>
+    {% endif %}
     {% endif %}
 
     <a href="{% url 'crm:price_list' %}"
@@ -313,7 +318,7 @@ tailwind.config = {
         <p class="text-sm font-medium text-slate-200 truncate">{{ request.user.get_full_name|default:request.user.username }}</p>
         <p class="text-xs text-slate-500 truncate">{{ request.user.profile.get_role_display }}</p>
       </div>
-      <button @click="sidebarOpen = !sidebarOpen" class="text-slate-500 hover:text-slate-300 flex-shrink-0 ml-auto" title="Свернуть">
+      <button type="button" @click="sidebarOpen = !sidebarOpen" class="crm-icon-button flex-shrink-0 ml-auto" :aria-label="sidebarOpen ? 'Свернуть боковое меню' : 'Развернуть боковое меню'" title="Свернуть">
         <svg :class="sidebarOpen ? '' : 'rotate-180'" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
       </button>
     </div>
@@ -324,12 +329,12 @@ tailwind.config = {
 <div :class="sidebarOpen ? 'lg:ml-60' : 'lg:ml-16'" class="transition-all duration-200 min-h-screen flex flex-col">
 
   <!-- Top Bar -->
-  <header class="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-sm border-b border-slate-800 flex items-center px-4 py-3 gap-3 min-h-[60px]">
-    <button @click="mobileOpen = !mobileOpen" class="lg:hidden text-slate-400 hover:text-white">
+  <header class="crm-topbar sticky top-0 z-30 flex items-center px-4 py-3 gap-3 min-h-[60px]">
+    <button type="button" @click="mobileOpen = !mobileOpen" class="crm-icon-button lg:hidden" :aria-label="mobileOpen ? 'Закрыть меню' : 'Открыть меню'" :aria-expanded="mobileOpen">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
 
-    <h1 class="text-base font-semibold text-slate-100 hidden sm:block">{% block page_title %}{% endblock %}</h1>
+    <h1 class="crm-page-title text-base font-semibold hidden sm:block">{% block page_title %}{% endblock %}</h1>
     <div class="flex-1"></div>
 
     <!-- Search -->
@@ -353,6 +358,11 @@ tailwind.config = {
       {% endif %}
     </a>
 
+    <button type="button" class="crm-theme-toggle" @click="toggleTheme()" :aria-label="theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'">
+      <svg x-show="theme !== 'dark'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364-.707.707M6.343 17.657l-.707.707m12.728 0-.707-.707M6.343 6.343l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <svg x-show="theme === 'dark'" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20.354 15.354A9 9 0 018.646 3.646 9 9 0 1010.354 20.354a9 9 0 0010-5z"/></svg>
+    </button>
+
     <div class="relative" x-data="{ open: false }">
       <button @click="open = !open" class="w-8 h-8 bg-indigo-700 rounded-full flex items-center justify-center text-sm font-semibold text-white">
         {{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}
@@ -370,7 +380,10 @@ tailwind.config = {
         <a href="{% url 'crm:filemanager' %}" class="block px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800">🗂️ Файловый менеджер</a>
         {% endif %}
         <div class="border-t border-slate-800 my-1"></div>
-        <a href="{% url 'crm:logout' %}" class="block px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10">Выйти</a>
+        <form method="post" action="{% url 'crm:logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="block w-full px-4 py-2 text-left text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10">Выйти</button>
+        </form>
       </div>
     </div>
   </header>
@@ -392,50 +405,13 @@ tailwind.config = {
   </div>
   {% endif %}
 
-  <main class="flex-1 p-4 lg:p-6">
+  <main class="crm-page flex-1 p-4 lg:p-6">
     {% block content %}{% endblock %}
   </main>
 </div>
 
-<script>
-document.body.addEventListener('htmx:configRequest', (e) => {
-  e.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
-});
-</script>
-
-<script>
-/* ─── Маска телефона +7 (___) ___-__-__ ─── */
-(function () {
-  function applyPhoneMask(el) {
-    function fmt(raw) {
-      var d = raw.replace(/\D/g, '');
-      if (d.charAt(0) === '8') d = '7' + d.slice(1);
-      if (d.length > 0 && d.charAt(0) !== '7') d = '7' + d;
-      d = d.slice(0, 11);
-      var r = '';
-      if (d.length >= 1) r = '+7';
-      if (d.length >= 2) r += ' (' + d.slice(1, Math.min(4, d.length));
-      if (d.length >= 4) r += ') ' + d.slice(4, Math.min(7, d.length));
-      if (d.length >= 7) r += '-' + d.slice(7, Math.min(9, d.length));
-      if (d.length >= 9) r += '-' + d.slice(9, 11);
-      return r;
-    }
-    el.addEventListener('input', function () { this.value = fmt(this.value); });
-    el.addEventListener('focus', function () { if (!this.value) this.value = '+7 ('; });
-    el.addEventListener('blur',  function () {
-      if (this.value === '+7 (' || this.value === '+7') this.value = '';
-    });
-    el.addEventListener('keydown', function (e) {
-      if (e.key === 'Backspace' && (this.value === '+7 (' || this.value === '+7')) {
-        this.value = ''; e.preventDefault();
-      }
-    });
-  }
-  document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-phone]').forEach(applyPhoneMask);
-  });
-})();
-</script>
+<script>window.crmCsrfToken = '{{ csrf_token }}';</script>
+<script src="{% static 'crm/js/crm.js' %}?v=20260921-1"></script>
 
 {% block extra_js %}{% endblock %}
 </body>

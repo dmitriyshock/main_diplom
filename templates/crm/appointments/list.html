@@ -163,14 +163,17 @@
 
             {% if not appt.created_order %}
             <!-- В заказ -->
-            <a href="{% url 'crm:appointment_to_order' appt.pk %}"
-               onclick="return confirm('Создать заказ из этой записи?')"
-               class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300
-                      hover:bg-indigo-600/40 border border-indigo-500/30 text-xs
-                      whitespace-nowrap transition-all"
-               title="Создать заказ">
-              ➕ В заказ
-            </a>
+            <form method="post" action="{% url 'crm:appointment_to_order' appt.pk %}" class="inline"
+                  onsubmit="return confirm('Создать заказ из этой записи?')">
+              {% csrf_token %}
+              <button type="submit"
+                      class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300
+                             hover:bg-indigo-600/40 border border-indigo-500/30 text-xs
+                             whitespace-nowrap transition-all"
+                      title="Создать заказ">
+                ➕ В заказ
+              </button>
+            </form>
             {% else %}
             <!-- Перейти к заказу -->
             <a href="{% url 'crm:repair_detail' appt.created_order.pk %}"

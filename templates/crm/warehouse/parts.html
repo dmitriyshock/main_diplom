@@ -132,12 +132,20 @@
               <a href="{% url 'crm:part_edit' part.pk %}" class="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white" title="Редактировать">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
               </a>
-              <a href="{% url 'crm:part_stock_in' part.pk %}" class="p-1.5 rounded-lg hover:bg-green-800 text-slate-400 hover:text-green-300" title="Приход">
+              <form method="post" action="{% url 'crm:part_stock_in' part.pk %}" class="inline-flex">
+                {% csrf_token %}
+                <input type="hidden" name="quantity" value="1">
+                <button type="submit" class="p-1.5 rounded-lg hover:bg-green-800 text-slate-400 hover:text-green-300" title="Добавить 1 шт." aria-label="Добавить одну единицу {{ part.name }}">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-              </a>
-              <a href="{% url 'crm:part_stock_out' part.pk %}" class="p-1.5 rounded-lg hover:bg-red-900 text-slate-400 hover:text-red-300" title="Списание">
+                </button>
+              </form>
+              <form method="post" action="{% url 'crm:part_stock_out' part.pk %}" class="inline-flex">
+                {% csrf_token %}
+                <input type="hidden" name="quantity" value="1">
+                <button type="submit" class="p-1.5 rounded-lg hover:bg-red-900 text-slate-400 hover:text-red-300" title="Списать 1 шт." aria-label="Списать одну единицу {{ part.name }}">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
-              </a>
+                </button>
+              </form>
             </div>
           </td>
         </tr>

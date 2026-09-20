@@ -186,3 +186,11 @@ class PublicHomepageTests(TestCase):
             'Подтвердите согласие на обработку персональных данных.',
         )
         self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_public_shell_contains_cookie_notice_and_policy_link(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, 'data-cookie-notice')
+        self.assertContains(response, 'data-cookie-accept')
+        self.assertContains(response, reverse('cookies'))
+        self.assertContains(response, 'технические cookie')

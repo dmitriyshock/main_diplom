@@ -1,4 +1,5 @@
 from functools import wraps
+from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.http import HttpResponseForbidden
 def get_role(user):
@@ -15,6 +16,13 @@ def crm_required(view_func):
     def wrapper(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(f'/crm/login/?next={request.path}')
+        try:
+            profile = request.user.profile
+        except Exception:
+            profile = None
+        if profile is not None and not profile.is_active:
+            logout(request)
+            return HttpResponseForbidden("Доступ к CRM отключён")
         return view_func(request, *args, **kwargs)
     return wrapper
 

@@ -1,79 +1,83 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Вход — Kayros CRM</title>
+<script>
+  (function () {
+    var storedTheme = null;
+    try { storedTheme = localStorage.getItem('kayros-crm-theme'); } catch (error) { /* Storage can be disabled. */ }
+    var theme = storedTheme === 'dark' || storedTheme === 'light'
+      ? storedTheme
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }());
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  body { font-family: 'Inter', sans-serif; }
-  .input-dark {
-    background: rgb(15 23 42);
-    border: 1px solid rgb(51 65 85);
-    color: rgb(226 232 240);
-    border-radius: 0.5rem;
-    transition: border-color 0.15s;
-  }
-  .input-dark:focus {
-    outline: none;
-    border-color: rgb(99 102 241);
-    box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15);
-  }
-  .input-dark::placeholder { color: rgb(100 116 139); }
-</style>
+<link rel="stylesheet" href="{% static 'crm/css/crm.css' %}?v=20260921-1">
 </head>
-<body class="bg-slate-950 min-h-screen flex items-center justify-center p-4">
+<body class="crm-login-body min-h-screen flex items-center justify-center p-4">
 
-<div class="w-full max-w-sm">
-  <!-- Logo -->
+<main class="w-full max-w-sm relative">
+  <button type="button" class="crm-theme-toggle absolute right-0 -top-1" id="crmLoginTheme" aria-label="Включить тёмную тему" title="Сменить тему">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364-.707.707M6.343 17.657l-.707.707m12.728 0-.707-.707M6.343 6.343l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  </button>
+
   <div class="text-center mb-8">
-    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 mb-4">
-      <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
-      </svg>
+    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 mb-4" aria-hidden="true">
+      <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
     </div>
-    <h1 class="text-xl font-bold text-slate-100">{{ site.company_name }}</h1>
-    <p class="text-sm text-slate-500 mt-1">Система управления сервисным центром</p>
+    <h1 class="crm-login-brand text-xl font-bold">{{ site.company_name }}</h1>
+    <p class="crm-login-subtitle text-sm mt-1">Система управления сервисным центром</p>
   </div>
 
-  <!-- Card -->
-  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+  <section class="crm-login-card rounded-2xl p-8 border">
     <h2 class="text-base font-semibold text-slate-200 mb-6">Вход в систему</h2>
 
     {% if error %}
-    <div class="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-      {{ error }}
-    </div>
+    <div class="crm-login-error mb-4 px-4 py-3 rounded-lg border text-sm" role="alert">{{ error }}</div>
     {% endif %}
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <div>
-        <label class="block text-xs font-medium text-slate-400 mb-1.5">Логин</label>
-        <input type="text" name="username" autofocus required
-               class="input-dark w-full px-3 py-2.5 text-sm"
-               placeholder="Введите логин">
+        <label for="crm-username" class="crm-login-label block text-xs font-medium mb-1.5">Логин</label>
+        <input id="crm-username" type="text" name="username" autofocus required autocomplete="username" class="input-dark w-full px-3 py-2.5 text-sm" placeholder="Введите логин">
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-400 mb-1.5">Пароль</label>
-        <input type="password" name="password" required
-               class="input-dark w-full px-3 py-2.5 text-sm"
-               placeholder="Введите пароль">
+        <label for="crm-password" class="crm-login-label block text-xs font-medium mb-1.5">Пароль</label>
+        <input id="crm-password" type="password" name="password" required autocomplete="current-password" class="input-dark w-full px-3 py-2.5 text-sm" placeholder="Введите пароль">
       </div>
-      <button type="submit"
-              class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold
-                     py-2.5 px-4 rounded-lg transition-colors mt-2">
-        Войти
-      </button>
+      <button type="submit" class="btn-primary w-full text-sm font-semibold py-2.5 px-4 mt-2">Войти</button>
     </form>
-  </div>
+  </section>
 
-  <p class="text-center text-xs text-slate-600 mt-6">Kayros CRM &copy; 2025</p>
-</div>
+  <p class="crm-login-footer text-center text-xs mt-6">Kayros CRM &copy; {% now "Y" %}</p>
+</main>
 
+<script>
+  (function () {
+    var button = document.getElementById('crmLoginTheme');
+    if (!button) return;
+    function updateLabel() {
+      var isDark = document.documentElement.dataset.theme === 'dark';
+      button.setAttribute('aria-label', isDark ? 'Включить светлую тему' : 'Включить тёмную тему');
+      button.setAttribute('title', isDark ? 'Светлая тема' : 'Тёмная тема');
+    }
+    updateLabel();
+    button.addEventListener('click', function () {
+      var nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+      try { localStorage.setItem('kayros-crm-theme', nextTheme); } catch (error) { /* Storage can be disabled. */ }
+      updateLabel();
+    });
+  }());
+</script>
 </body>
 </html>

@@ -34,6 +34,16 @@
         </div>
 
         <div>
+          <label class="text-xs text-slate-400 mb-1 block">Филиал</label>
+          <select name="branch" class="input-dark w-full px-3 py-2 text-sm">
+            <option value="">— не указан —</option>
+            {% for branch in branches %}
+            <option value="{{ branch.pk }}" {% if part.branch_id == branch.pk or not part and active_branch and active_branch.pk == branch.pk %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
           <label class="text-xs text-slate-400 mb-1 block">Марка</label>
           <select name="brand" id="id_part_brand" class="input-dark w-full px-3 py-2 text-sm">
             <option value="">— не указана —</option>

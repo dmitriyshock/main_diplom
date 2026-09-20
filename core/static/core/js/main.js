@@ -93,4 +93,15 @@
     window.setTimeout(() => message.classList.add('message-leaving'), 4200);
     window.setTimeout(() => message.remove(), 4700);
   });
+
+  const cookieNotice = document.querySelector('[data-cookie-notice]');
+  const cookieAccept = document.querySelector('[data-cookie-accept]');
+  const cookieNoticeKey = 'kayros-cookie-notice';
+  let cookieNoticeAccepted = false;
+  try { cookieNoticeAccepted = localStorage.getItem(cookieNoticeKey) === 'accepted-v1'; } catch (error) { cookieNoticeAccepted = false; }
+  if (cookieNotice && !cookieNoticeAccepted) cookieNotice.hidden = false;
+  cookieAccept?.addEventListener('click', () => {
+    try { localStorage.setItem(cookieNoticeKey, 'accepted-v1'); } catch (error) { /* Dismiss for this page when storage is unavailable. */ }
+    if (cookieNotice) cookieNotice.hidden = true;
+  });
 })();

@@ -49,6 +49,16 @@
                  placeholder="iPhone 14, Samsung S22...">
         </div>
 
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Филиал</label>
+          <select name="branch" class="input-dark w-full px-3 py-2 text-sm">
+            <option value="">— не указан —</option>
+            {% for branch in branches %}
+            <option value="{{ branch.pk }}" {% if accessory.branch_id == branch.pk or not accessory and active_branch and active_branch.pk == branch.pk %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         {% if not acc %}
         <div>
           <label class="text-xs text-slate-400 mb-1 block">Начальный остаток</label>

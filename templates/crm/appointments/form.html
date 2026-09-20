@@ -120,19 +120,21 @@
           </button>
           <a href="{% url 'crm:appointment_list' %}" class="btn-secondary px-6 py-2">Отмена</a>
         </div>
-        {% if appointment %}
-        <form method="post" action="{% url 'crm:appointment_delete' appointment.pk %}"
-              onsubmit="return confirm('Удалить запись для {{ appointment.name }}?')">
-          {% csrf_token %}
-          <button type="submit"
-                  class="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-all">
-            Удалить запись
-          </button>
-        </form>
-        {% endif %}
       </div>
 
     </form>
+
+    {% if appointment %}
+    <form method="post" action="{% url 'crm:appointment_delete' appointment.pk %}"
+          class="mt-4 flex justify-end"
+          onsubmit="return confirm('Удалить запись для {{ appointment.name }}?')">
+      {% csrf_token %}
+      <button type="submit"
+              class="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-all">
+        Удалить запись
+      </button>
+    </form>
+    {% endif %}
   </div>
 
   {% if appointment %}

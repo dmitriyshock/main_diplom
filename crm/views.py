@@ -1,6 +1,7 @@
 import mimetypes
 import os
 import shutil
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -14,6 +15,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q, Sum, Avg
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -25,6 +27,74 @@ from .models import (
     RepairOrder, RepairOrderAccessory, RepairOrderPart, RepairOrderService, SaleOrder,
     SaleOrderItem, StockMovement, Supplier, Task, UserProfile,
 )
+
+
+def _branch_scoped_queryset(request, queryset):
+    """Limit operational objects to the current user's accessible branches."""
+    if get_role(request.user) in ('admin', 'manager'):
+        return queryset
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return queryset.none()
+    if profile.branch_id:
+        return queryset.filter(branch_id=profile.branch_id)
+    return queryset.filter(branch_id__in=profile.branches.values('id'))
+
+
+def _branch_scoped_object(request, queryset, pk):
+    return get_object_or_404(_branch_scoped_queryset(request, queryset), pk=pk)
+
+
+def _accessible_branches(request):
+    if get_role(request.user) in ('admin', 'manager'):
+        return Branch.objects.all()
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return Branch.objects.none()
+    if profile.branch_id:
+        return Branch.objects.filter(pk=profile.branch_id)
+    return profile.branches.all()
+
+
+def _selected_accessible_branch(request, branch_id=None):
+    branch_id = branch_id if branch_id is not None else request.POST.get('branch')
+    if branch_id:
+        return get_object_or_404(_accessible_branches(request), pk=branch_id)
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return None
+    if profile.branch_id:
+        return profile.branch
+    return profile.branches.order_by('pk').first()
+
+
+def _stock_for_order(request, model, order):
+    """Return stock usable in an order without leaking another branch's stock."""
+    if order.branch_id:
+        queryset = model.objects.filter(branch_id=order.branch_id)
+    else:
+        queryset = model.objects.none()
+    if get_role(request.user) in ('admin', 'manager'):
+        queryset = queryset | model.objects.filter(branch__isnull=True)
+    return queryset
+
+
+def _financial_repair_is_locked(repair):
+    return repair.is_paid or repair.status == 'issued'
+
+
+def _repair_assignees_for_branch(branch):
+    """Return active repair assignees attached to the order's branch."""
+    queryset = User.objects.filter(
+        is_active=True,
+        profile__is_active=True,
+        profile__role__in=('master', 'employee'),
+    )
+    if branch:
+        queryset = queryset.filter(
+            Q(profile__branch=branch) | Q(profile__branches=branch)
+        )
+    return queryset.distinct()
 
 
 # ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -39,12 +109,20 @@ def crm_login(request):
                             password=request.POST.get('password'))
         if user:
             login(request, user)
-            return redirect(request.GET.get('next', 'crm:dashboard'))
+            next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url and url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                return redirect(next_url)
+            return redirect('crm:dashboard')
         error = 'Неверный логин или пароль'
     return render(request, 'crm/login.html', {'error': error})
 
 
 @crm_required
+@require_POST
 def crm_logout(request):
     logout(request)
     return redirect('crm:login')
@@ -58,13 +136,16 @@ def dashboard(request):
     today = now.date()
     month_start = today.replace(day=1)
 
-    orders_qs = RepairOrder.objects.select_related('customer', 'brand', 'phone_model', 'assigned_to')
+    orders_qs = _branch_scoped_queryset(request, RepairOrder.objects.select_related(
+        'customer', 'brand', 'phone_model', 'assigned_to'
+    ))
+    payments_qs = _branch_scoped_queryset(request, PaymentRecord.objects.all())
 
     open_statuses = ['new', 'diagnosis', 'waiting_parts', 'in_progress', 'approval']
     open_orders = orders_qs.filter(status__in=open_statuses)
 
     # Payments this month
-    payments_month = PaymentRecord.objects.filter(
+    payments_month = payments_qs.filter(
         created_at__date__gte=month_start,
         payment_type__in=['repair', 'sale'],
     )
@@ -73,15 +154,19 @@ def dashboard(request):
         status='issued', paid_at__date__gte=month_start
     ).aggregate(p=Sum('final_cost') - Sum('cost_price'))['p'] or Decimal('0')
 
-    payments_today = PaymentRecord.objects.filter(created_at__date=today)
+    payments_today = payments_qs.filter(created_at__date=today)
     revenue_today = payments_today.aggregate(t=Sum('amount'))['t'] or Decimal('0')
 
     avg_check = orders_qs.filter(
         status='issued', paid_at__date__gte=month_start
     ).aggregate(a=Avg('final_cost'))['a'] or Decimal('0')
 
-    low_stock_parts = Part.objects.filter(quantity__lte=F('min_quantity')).order_by('quantity')[:8]
-    low_stock_acc = Accessory.objects.filter(quantity__lte=F('min_quantity')).order_by('quantity')[:4]
+    low_stock_parts = _branch_scoped_queryset(request, Part.objects.all()).filter(
+        quantity__lte=F('min_quantity')
+    ).order_by('quantity')[:8]
+    low_stock_acc = _branch_scoped_queryset(request, Accessory.objects.all()).filter(
+        quantity__lte=F('min_quantity')
+    ).order_by('quantity')[:4]
     low_stock_items = list(low_stock_parts) + list(low_stock_acc)
 
     # Chart data: last 30 days
@@ -90,10 +175,10 @@ def dashboard(request):
     chart_revenue = []
     chart_profit = []
     for d in days:
-        rev = PaymentRecord.objects.filter(
+        rev = payments_qs.filter(
             created_at__date=d, payment_type__in=['repair', 'sale']
         ).aggregate(t=Sum('amount'))['t'] or 0
-        prf = RepairOrder.objects.filter(
+        prf = orders_qs.filter(
             paid_at__date=d
         ).aggregate(p=Sum('final_cost') - Sum('cost_price'))['p'] or 0
         chart_revenue.append(float(rev))
@@ -118,13 +203,12 @@ def dashboard(request):
     }
 
     # Top masters
-    top_masters = User.objects.filter(
-        assigned_repairs__status='issued',
-        assigned_repairs__paid_at__date__gte=month_start,
-    ).annotate(
-        orders_count=Count('assigned_repairs'),
-        total_profit=Sum('assigned_repairs__final_cost') - Sum('assigned_repairs__cost_price'),
-    ).order_by('-total_profit')[:5]
+    top_master_repairs = orders_qs.filter(status='issued', paid_at__date__gte=month_start)
+    top_masters = User.objects.annotate(
+        orders_count=Count('assigned_repairs', filter=Q(assigned_repairs__in=top_master_repairs)),
+        total_profit=Sum('assigned_repairs__final_cost', filter=Q(assigned_repairs__in=top_master_repairs))
+        - Sum('assigned_repairs__cost_price', filter=Q(assigned_repairs__in=top_master_repairs)),
+    ).filter(orders_count__gt=0).order_by('-total_profit')[:5]
 
     stats = {
         'revenue_today': revenue_today,
@@ -158,17 +242,17 @@ def search(request):
     q = request.GET.get('q', '').strip()
     results = {'orders': [], 'customers': [], 'parts': []}
     if len(q) >= 2:
-        results['orders'] = RepairOrder.objects.filter(
+        results['orders'] = _branch_scoped_queryset(request, RepairOrder.objects.filter(
             Q(order_number__icontains=q) | Q(customer__name__icontains=q) |
             Q(customer__phone__icontains=q) | Q(imei__icontains=q) |
             Q(complaint__icontains=q)
-        ).select_related('customer', 'brand', 'phone_model')[:10]
-        results['customers'] = Customer.objects.filter(
+        )).select_related('customer', 'brand', 'phone_model')[:10]
+        results['customers'] = _branch_scoped_queryset(request, Customer.objects.filter(
             Q(name__icontains=q) | Q(phone__icontains=q) | Q(email__icontains=q)
-        )[:10]
-        results['parts'] = Part.objects.filter(
+        ))[:10]
+        results['parts'] = _branch_scoped_queryset(request, Part.objects.filter(
             Q(name__icontains=q) | Q(sku__icontains=q)
-        )[:10]
+        ))[:10]
     return render(request, 'crm/search.html', {'q': q, 'results': results})
 
 
@@ -176,9 +260,9 @@ def search(request):
 
 @crm_required
 def customer_list(request):
-    qs = Customer.objects.annotate(
+    qs = _branch_scoped_queryset(request, Customer.objects.annotate(
         repair_count=Count('repairs'),
-    ).order_by('-created_at')
+    )).order_by('-created_at')
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(email__icontains=q))
@@ -188,14 +272,14 @@ def customer_list(request):
 
 @crm_required
 def customer_detail(request, pk):
-    customer = get_object_or_404(Customer, pk=pk)
-    repairs = customer.repairs.select_related('brand', 'phone_model').order_by('-created_at')
+    customer = _branch_scoped_object(request, Customer.objects.all(), pk)
+    repairs = _branch_scoped_queryset(request, customer.repairs.select_related('brand', 'phone_model')).order_by('-created_at')
     return render(request, 'crm/customers/detail.html', {'customer': customer, 'repairs': repairs})
 
 
 @crm_required
 def customer_edit(request, pk=None):
-    customer = get_object_or_404(Customer, pk=pk) if pk else None
+    customer = _branch_scoped_object(request, Customer.objects.all(), pk) if pk else None
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         phone = request.POST.get('phone', '').strip()
@@ -214,6 +298,7 @@ def customer_edit(request, pk=None):
                     name=name, phone=phone,
                     email=request.POST.get('email', ''),
                     notes=request.POST.get('notes', ''),
+                    branch=_selected_accessible_branch(request),
                 )
                 messages.success(request, 'Клиент создан')
             return redirect('crm:customer_detail', customer.pk)
@@ -225,9 +310,9 @@ def customer_search_api(request):
     q = request.GET.get('q', '').strip()
     if len(q) < 2:
         return JsonResponse([], safe=False)
-    customers = Customer.objects.filter(
+    customers = _branch_scoped_queryset(request, Customer.objects.filter(
         Q(name__icontains=q) | Q(phone__icontains=q)
-    ).values('id', 'name', 'phone')[:10]
+    )).values('id', 'name', 'phone')[:10]
     return JsonResponse(list(customers), safe=False)
 
 
@@ -313,10 +398,23 @@ def repair_list(request):
 def repair_create(request):
     if request.method == 'POST':
         with transaction.atomic():
+            branch = _selected_accessible_branch(request)
+            brand_id = request.POST.get('brand')
+            model_id = request.POST.get('phone_model')
+            if not brand_id or not model_id:
+                messages.error(request, 'Выберите бренд и модель')
+                return _repair_create_ctx(request)
+            brand = get_object_or_404(Brand, pk=brand_id, is_active=True)
+            phone_model = get_object_or_404(
+                PhoneModel, pk=model_id, brand=brand, is_active=True,
+            )
+
             # Customer lookup or create
             customer_id = request.POST.get('customer_id')
             if customer_id:
-                customer = get_object_or_404(Customer, pk=customer_id)
+                customer = _branch_scoped_object(request, Customer.objects.all(), customer_id)
+                if customer.branch_id != (branch.pk if branch else None):
+                    raise Http404
             else:
                 customer_name = request.POST.get('customer_name', '').strip()
                 customer_phone = request.POST.get('customer_phone', '').strip()
@@ -324,30 +422,25 @@ def repair_create(request):
                     messages.error(request, 'Укажите телефон клиента')
                     return _repair_create_ctx(request)
                 customer, _ = Customer.objects.get_or_create(
-                    phone=customer_phone,
+                    phone=customer_phone, branch=branch,
                     defaults={'name': customer_name or customer_phone},
                 )
 
-            brand_id = request.POST.get('brand')
-            model_id = request.POST.get('phone_model')
-            if not brand_id or not model_id:
-                messages.error(request, 'Выберите бренд и модель')
-                return _repair_create_ctx(request)
-
-            branch_id = request.POST.get('branch') or None
             assigned_id = request.POST.get('assigned_to') or None
             # Если мастер/сотрудник создаёт заказ и не выбрал мастера — назначаем себя
             if not assigned_id:
                 profile = getattr(request.user, 'profile', None)
                 if profile and profile.role in ('master', 'employee'):
                     assigned_id = request.user.pk
+            if assigned_id:
+                get_object_or_404(_repair_assignees_for_branch(branch), pk=assigned_id)
             deadline_str = request.POST.get('deadline') or None
             deadline = date.fromisoformat(deadline_str) if deadline_str else None
 
             order = RepairOrder.objects.create(
                 customer=customer,
-                brand_id=brand_id,
-                phone_model_id=model_id,
+                brand=brand,
+                phone_model=phone_model,
                 imei=request.POST.get('imei', ''),
                 device_password=request.POST.get('device_password', ''),
                 complaint=request.POST.get('complaint', ''),
@@ -357,7 +450,7 @@ def repair_create(request):
                 warranty_days=request.POST.get('warranty_days') or 90,
                 created_by=request.user,
                 assigned_to_id=assigned_id,
-                branch_id=branch_id,
+                branch=branch,
                 deadline=deadline,
             )
             OrderHistory.objects.create(
@@ -369,13 +462,12 @@ def repair_create(request):
             # Если заказ создан из записи — закрываем запись и привязываем заказ
             appt_pk = request.POST.get('from_appointment')
             if appt_pk:
-                try:
-                    appt_obj = Appointment.objects.get(pk=appt_pk)
-                    appt_obj.created_order = order
-                    appt_obj.status = 'completed'
-                    appt_obj.save(update_fields=['created_order', 'status'])
-                except Appointment.DoesNotExist:
-                    pass
+                appt_obj = _branch_scoped_object(request, Appointment.objects.all(), appt_pk)
+                if appt_obj.branch_id != order.branch_id:
+                    raise Http404
+                appt_obj.created_order = order
+                appt_obj.status = 'completed'
+                appt_obj.save(update_fields=['created_order', 'status'])
 
             messages.success(request, f'Заказ {order.order_number} создан')
             return redirect('crm:repair_detail', order.pk)
@@ -390,24 +482,18 @@ def _repair_create_ctx(request):
     else:
         assigned_ids = list(profile.branches.values_list('id', flat=True)) if profile else []
         available_branches = Branch.objects.filter(id__in=assigned_ids, is_active=True)
-    # Текущий пользователь всегда подставляется как мастер по умолчанию
-    default_assigned = request.user
-
-    # Список мастеров: все с ролью master/employee + текущий пользователь (если не входит)
-    masters_qs = User.objects.filter(
-        profile__role__in=['master', 'employee'], profile__is_active=True
-    )
-    if not masters_qs.filter(pk=request.user.pk).exists():
-        masters_qs = User.objects.filter(
-            Q(profile__role__in=['master', 'employee'], profile__is_active=True) |
-            Q(pk=request.user.pk)
-        ).distinct()
+    requested_branch_id = request.GET.get('branch') or request.POST.get('branch')
+    selected_branch = _selected_accessible_branch(request, requested_branch_id)
+    masters_qs = _repair_assignees_for_branch(selected_branch)
+    default_assigned = request.user if masters_qs.filter(pk=request.user.pk).exists() else None
 
     # Автозаполнение из записи (GET-параметры от appointment_to_order)
     prefill_customer = None
     customer_id = request.GET.get('customer_id') or request.POST.get('customer_id')
     if customer_id:
-        prefill_customer = Customer.objects.filter(pk=customer_id).first()
+        prefill_customer = _branch_scoped_object(request, Customer.objects.all(), customer_id)
+        if selected_branch and prefill_customer.branch_id != selected_branch.pk:
+            raise Http404
 
     from_appt_pk = request.GET.get('from_appointment', '')
     prefill_complaint = request.GET.get('complaint', '')
@@ -418,7 +504,7 @@ def _repair_create_ctx(request):
         'brands': Brand.objects.filter(is_active=True).order_by('order', 'name'),
         'masters': masters_qs,
         'branches': available_branches,
-        'active_branch': profile.branch if profile else None,
+        'active_branch': selected_branch,
         'default_assigned': default_assigned,
         'prefill_customer': prefill_customer,
         'prefill_complaint': prefill_complaint,
@@ -430,14 +516,15 @@ def _repair_create_ctx(request):
 
 @crm_required
 def repair_detail(request, pk):
-    repair = get_object_or_404(
+    repair = _branch_scoped_object(
+        request,
         RepairOrder.objects.select_related(
             'customer', 'brand', 'phone_model', 'assigned_to', 'created_by', 'branch'
         ).prefetch_related(
             'order_services__service', 'order_parts__part',
             'order_accessories__accessory', 'history__user'
         ),
-        pk=pk,
+        pk,
     )
     services_total = sum(s.price for s in repair.order_services.all())
     parts_total = sum(p.total for p in repair.order_parts.all())
@@ -447,12 +534,12 @@ def repair_detail(request, pk):
         phone_model=repair.phone_model, is_active=True
     ).select_related('phone_model__brand')
     # Запчасти: сначала подходящие для модели, потом все остальные
-    parts_for_model = Part.objects.filter(
+    parts_for_model = _stock_for_order(request, Part, repair).filter(
         phone_model=repair.phone_model, quantity__gt=0
     ).order_by('name')
-    all_parts = Part.objects.filter(quantity__gt=0).order_by('name')
+    all_parts = _stock_for_order(request, Part, repair).filter(quantity__gt=0).order_by('name')
     # Аксессуары на складе
-    available_accessories = Accessory.objects.filter(quantity__gt=0).order_by('name')
+    available_accessories = _stock_for_order(request, Accessory, repair).filter(quantity__gt=0).order_by('name')
 
     tabs = [
         ('info', 'Информация'),
@@ -475,7 +562,7 @@ def repair_detail(request, pk):
         'available_parts': all_parts,
         'parts_for_model': parts_for_model,
         'available_accessories': available_accessories,
-        'masters': User.objects.filter(profile__role__in=['master', 'employee', 'admin', 'manager']),
+        'masters': _repair_assignees_for_branch(repair.branch),
         'status_choices': RepairOrder.STATUS_CHOICES,
         'history': repair.history.order_by('created_at'),
         'tabs': tabs,
@@ -487,7 +574,10 @@ def repair_detail(request, pk):
 @crm_required
 @require_POST
 def repair_update_status(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect('crm:repair_detail', pk)
     new_status = request.POST.get('status')
     valid = [v for v, _ in RepairOrder.STATUS_CHOICES]
     if new_status in valid and new_status != repair.status:
@@ -506,9 +596,14 @@ def repair_update_status(request, pk):
 @crm_required
 @require_POST
 def repair_update_assigned(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect('crm:repair_detail', pk)
     assigned_id = request.POST.get('assigned_to')
-    master = get_object_or_404(User, pk=assigned_id) if assigned_id else None
+    master = get_object_or_404(
+        _repair_assignees_for_branch(repair.branch), pk=assigned_id
+    ) if assigned_id else None
     repair.assigned_to = master
     repair.save(update_fields=['assigned_to', 'updated_at'])
     name = master.get_full_name() if master else 'не назначен'
@@ -525,7 +620,10 @@ def repair_update_assigned(request, pk):
 @require_POST
 def repair_update_device(request, pk):
     """Смена марки и модели телефона в ремонте."""
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect('crm:repair_detail', pk)
     brand_id = request.POST.get('brand_id')
     model_id = request.POST.get('phone_model_id')
     if not brand_id or not model_id:
@@ -563,7 +661,10 @@ def models_by_brand_api(request):
 @crm_required
 @require_POST
 def repair_add_service(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
     service_id = request.POST.get('service_id')
     custom_name = request.POST.get('custom_name', '').strip()
     custom_price = request.POST.get('custom_price', '0') or '0'
@@ -592,7 +693,10 @@ def repair_add_service(request, pk):
 @crm_required
 @require_POST
 def repair_remove_service(request, pk, service_pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
     svc = get_object_or_404(RepairOrderService, pk=service_pk, order=repair)
     name = svc.name
     svc.delete()
@@ -608,11 +712,22 @@ def repair_remove_service(request, pk, service_pk):
 @crm_required
 @require_POST
 def repair_add_part(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
-    part = get_object_or_404(Part, pk=request.POST.get('part_id'))
-    qty = int(request.POST.get('quantity', 1))
-    price_raw = str(request.POST.get('price', '') or part.sale_price).replace(',', '.')
-    price = Decimal(price_raw)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
+    part = get_object_or_404(_stock_for_order(request, Part, repair), pk=request.POST.get('part_id'))
+    try:
+        qty = int(request.POST.get('quantity', 1))
+        price_raw = str(request.POST.get('price', '') or part.sale_price).replace(',', '.')
+        price = Decimal(price_raw)
+    except (TypeError, ValueError, ArithmeticError):
+        messages.error(request, 'Укажите корректные количество и цену')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
+
+    if qty < 1 or price < 0:
+        messages.error(request, 'Количество должно быть положительным, цена не может быть отрицательной')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
 
     if part.quantity < qty:
         messages.error(request, f'Недостаточно запчасти "{part.name}" на складе (есть: {part.quantity})')
@@ -631,7 +746,10 @@ def repair_add_part(request, pk):
 @crm_required
 @require_POST
 def repair_remove_part(request, pk, part_pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
     op = get_object_or_404(RepairOrderPart, pk=part_pk, order=repair)
     name = op.part.name
     op.delete()
@@ -647,20 +765,31 @@ def repair_remove_part(request, pk, part_pk):
 @crm_required
 @require_POST
 def repair_add_accessory(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
     accessory_id = request.POST.get('accessory_id')
-    quantity = int(request.POST.get('quantity', 1) or 1)
-    price = request.POST.get('price', '').strip()
-
-    accessory = get_object_or_404(Accessory, pk=accessory_id)
-    if not price:
-        price = accessory.sale_price
+    accessory = get_object_or_404(_stock_for_order(request, Accessory, repair), pk=accessory_id)
+    try:
+        quantity = int(request.POST.get('quantity', 1) or 1)
+        raw_price = request.POST.get('price', '').strip()
+        price = Decimal(str(raw_price or accessory.sale_price).replace(',', '.'))
+    except (TypeError, ValueError, ArithmeticError):
+        messages.error(request, 'Укажите корректные количество и цену')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
+    if quantity < 1 or price < 0:
+        messages.error(request, 'Количество должно быть положительным, цена не может быть отрицательной')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
+    if accessory.quantity < quantity:
+        messages.error(request, f'Недостаточно аксессуара "{accessory.name}" на складе')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
 
     RepairOrderAccessory.objects.create(
         order=repair,
         accessory=accessory,
         quantity=quantity,
-        price=Decimal(str(price)),
+        price=price,
     )
     repair.recalculate_final_cost()
     OrderHistory.objects.create(
@@ -674,7 +803,10 @@ def repair_add_accessory(request, pk):
 @crm_required
 @require_POST
 def repair_remove_accessory(request, pk, accessory_pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    if _financial_repair_is_locked(repair):
+        messages.error(request, 'Оплаченный заказ нельзя изменять')
+        return redirect(f'/crm/repairs/{pk}/?tab=works')
     oa = get_object_or_404(RepairOrderAccessory, pk=accessory_pk, order=repair)
     name = oa.accessory.name
     oa.delete()
@@ -690,7 +822,7 @@ def repair_remove_accessory(request, pk, accessory_pk):
 @crm_required
 @require_POST
 def repair_add_comment(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
     comment = request.POST.get('comment', '').strip()
     if comment:
         OrderHistory.objects.create(
@@ -704,28 +836,80 @@ def repair_add_comment(request, pk):
 @crm_required
 @require_POST
 def repair_pay(request, pk):
-    repair = get_object_or_404(RepairOrder, pk=pk)
+    repair = _branch_scoped_object(request, RepairOrder.objects.all(), pk)
+    method = request.POST.get('method', 'cash')
+    payment_methods = dict(PaymentRecord.PAYMENT_METHODS)
+    if method not in payment_methods:
+        messages.error(request, 'Выберите допустимый способ оплаты')
+        return redirect('crm:repair_detail', pk)
     if repair.is_paid:
         messages.warning(request, 'Заказ уже оплачен')
         return redirect('crm:repair_detail', pk)
 
-    method = request.POST.get('method', 'cash')
     with transaction.atomic():
+        repair = RepairOrder.objects.select_for_update().get(pk=repair.pk)
+        if repair.is_paid:
+            messages.warning(request, 'Заказ уже оплачен')
+            return redirect('crm:repair_detail', pk)
+
+        part_requirements = defaultdict(int)
+        accessory_requirements = defaultdict(int)
+        order_parts = list(repair.order_parts.values('part_id', 'quantity'))
+        order_accessories = list(repair.order_accessories.values('accessory_id', 'quantity'))
+        for item in order_parts:
+            part_requirements[item['part_id']] += item['quantity']
+        for item in order_accessories:
+            accessory_requirements[item['accessory_id']] += item['quantity']
+
+        locked_parts = {
+            item.pk: item for item in Part.objects.select_for_update().filter(pk__in=part_requirements)
+        }
+        locked_accessories = {
+            item.pk: item for item in Accessory.objects.select_for_update().filter(pk__in=accessory_requirements)
+        }
+        for item_id, required_qty in part_requirements.items():
+            part = locked_parts.get(item_id)
+            if not part or part.quantity < required_qty:
+                messages.error(request, 'Недостаточно запчастей на складе')
+                return redirect('crm:repair_detail', pk)
+            if part.branch_id != repair.branch_id and not (
+                part.branch_id is None and get_role(request.user) in ('admin', 'manager')
+            ):
+                raise Http404
+        for item_id, required_qty in accessory_requirements.items():
+            accessory = locked_accessories.get(item_id)
+            if not accessory or accessory.quantity < required_qty:
+                messages.error(request, 'Недостаточно аксессуаров на складе')
+                return redirect('crm:repair_detail', pk)
+            if accessory.branch_id != repair.branch_id and not (
+                accessory.branch_id is None and get_role(request.user) in ('admin', 'manager')
+            ):
+                raise Http404
+
+        # All stock checks passed under locks. Only now do we commit the financial state.
+        for item_id, quantity in part_requirements.items():
+            part = locked_parts[item_id]
+            part.quantity -= quantity
+            part.save(update_fields=['quantity'])
+            StockMovement.objects.create(
+                part=part, movement_type='repair', quantity=-quantity,
+                comment=f'Списано по заказу {repair.order_number}', branch=repair.branch,
+                created_by=request.user,
+            )
+        for item_id, quantity in accessory_requirements.items():
+            accessory = locked_accessories[item_id]
+            accessory.quantity -= quantity
+            accessory.save(update_fields=['quantity'])
+            StockMovement.objects.create(
+                accessory=accessory, movement_type='repair', quantity=-quantity,
+                comment=f'Списано по заказу {repair.order_number}', branch=repair.branch,
+                created_by=request.user,
+            )
+
         repair.is_paid = True
         repair.paid_at = timezone.now()
         repair.status = 'issued'
         repair.save(update_fields=['is_paid', 'paid_at', 'status', 'updated_at'])
-
-        # Списать запчасти
-        for op in repair.order_parts.select_related('part').all():
-            op.part.quantity -= op.quantity
-            op.part.save(update_fields=['quantity'])
-            StockMovement.objects.create(
-                part=op.part, movement_type='repair',
-                quantity=-op.quantity,
-                comment=f'Списано по заказу {repair.order_number}',
-                created_by=request.user,
-            )
 
         PaymentRecord.objects.create(
             repair_order=repair,
@@ -757,7 +941,7 @@ def repair_pay(request, pk):
 
         OrderHistory.objects.create(
             order=repair, event_type='payment',
-            description=f'Оплачено {repair.final_cost} ₽ ({dict(PaymentRecord.PAYMENT_METHODS)[method]})',
+            description=f'Оплачено {repair.final_cost} ₽ ({payment_methods[method]})',
             user=request.user,
         )
 
@@ -767,11 +951,12 @@ def repair_pay(request, pk):
 
 @crm_required
 def repair_print(request, pk):
-    repair = get_object_or_404(
+    repair = _branch_scoped_object(
+        request,
         RepairOrder.objects.select_related(
             'customer', 'brand', 'phone_model', 'assigned_to', 'created_by'
         ).prefetch_related('order_services', 'order_parts__part'),
-        pk=pk,
+        pk,
     )
     site_settings = SiteSettings.get()
 
@@ -806,7 +991,7 @@ def repair_print(request, pk):
 
 @crm_required
 def warehouse_parts(request):
-    qs = Part.objects.select_related('brand', 'phone_model', 'supplier')
+    qs = _branch_scoped_queryset(request, Part.objects.select_related('brand', 'phone_model', 'supplier'))
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(sku__icontains=q))
@@ -817,7 +1002,7 @@ def warehouse_parts(request):
     elif request.GET.get('stock') == 'out':
         qs = [p for p in qs if p.is_out_of_stock]
 
-    all_parts = Part.objects.all()
+    all_parts = _branch_scoped_queryset(request, Part.objects.all())
     stats = {
         'total_parts': all_parts.count(),
         'stock_value': sum(p.stock_value for p in all_parts),
@@ -846,6 +1031,7 @@ def part_create(request):
             purchase_price=Decimal(request.POST.get('purchase_price', 0)),
             sale_price=Decimal(request.POST.get('sale_price', 0)),
             supplier_id=request.POST.get('supplier') or None,
+            branch=_selected_accessible_branch(request),
             notes=request.POST.get('notes', ''),
         )
         messages.success(request, 'Запчасть добавлена')
@@ -853,12 +1039,14 @@ def part_create(request):
     return render(request, 'crm/warehouse/part_form.html', {
         'brands': Brand.objects.filter(is_active=True),
         'suppliers': Supplier.objects.filter(is_active=True),
+        'branches': _accessible_branches(request).filter(is_active=True),
+        'active_branch': getattr(getattr(request.user, 'profile', None), 'branch', None),
     })
 
 
 @crm_required
 def part_edit(request, pk):
-    part = get_object_or_404(Part, pk=pk)
+    part = _branch_scoped_object(request, Part.objects.all(), pk)
     if request.method == 'POST':
         part.name = request.POST['name']
         part.brand_id = request.POST.get('brand') or None
@@ -868,6 +1056,7 @@ def part_edit(request, pk):
         part.purchase_price = Decimal(request.POST.get('purchase_price', 0))
         part.sale_price = Decimal(request.POST.get('sale_price', 0))
         part.supplier_id = request.POST.get('supplier') or None
+        part.branch = _selected_accessible_branch(request)
         part.notes = request.POST.get('notes', '')
         part.save()
         messages.success(request, 'Запчасть обновлена')
@@ -876,13 +1065,15 @@ def part_edit(request, pk):
         'part': part,
         'brands': Brand.objects.filter(is_active=True),
         'suppliers': Supplier.objects.filter(is_active=True),
+        'branches': _accessible_branches(request).filter(is_active=True),
+        'active_branch': getattr(getattr(request.user, 'profile', None), 'branch', None),
     })
 
 
 @crm_required
 @require_POST
 def part_stock_in(request, pk):
-    part = get_object_or_404(Part, pk=pk)
+    part = _branch_scoped_object(request, Part.objects.all(), pk)
     qty = int(request.POST.get('quantity', 0))
     price = Decimal(request.POST.get('price', 0))
     comment = request.POST.get('comment', '')
@@ -893,7 +1084,7 @@ def part_stock_in(request, pk):
         part.save(update_fields=['quantity', 'purchase_price'])
         StockMovement.objects.create(
             part=part, movement_type='in', quantity=qty,
-            unit_price=price, comment=comment, created_by=request.user,
+            unit_price=price, comment=comment, branch=part.branch, created_by=request.user,
         )
         messages.success(request, f'Поступление {qty} шт. "{part.name}"')
     return redirect('crm:warehouse_parts')
@@ -902,7 +1093,7 @@ def part_stock_in(request, pk):
 @crm_required
 @require_POST
 def part_stock_out(request, pk):
-    part = get_object_or_404(Part, pk=pk)
+    part = _branch_scoped_object(request, Part.objects.all(), pk)
     qty = int(request.POST.get('quantity', 0))
     comment = request.POST.get('comment', '')
     if qty > 0 and part.quantity >= qty:
@@ -910,7 +1101,7 @@ def part_stock_out(request, pk):
         part.save(update_fields=['quantity'])
         StockMovement.objects.create(
             part=part, movement_type='out', quantity=-qty,
-            comment=comment, created_by=request.user,
+            comment=comment, branch=part.branch, created_by=request.user,
         )
         messages.success(request, f'Списано {qty} шт. "{part.name}"')
     else:
@@ -920,7 +1111,7 @@ def part_stock_out(request, pk):
 
 @crm_required
 def warehouse_accessories(request):
-    qs = Accessory.objects.select_related('supplier')
+    qs = _branch_scoped_queryset(request, Accessory.objects.select_related('supplier'))
     q = request.GET.get('q', '')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(sku__icontains=q))
@@ -946,18 +1137,21 @@ def accessory_create(request):
             purchase_price=Decimal(request.POST.get('purchase_price', 0)),
             sale_price=Decimal(request.POST.get('sale_price', 0)),
             supplier_id=request.POST.get('supplier') or None,
+            branch=_selected_accessible_branch(request),
         )
         messages.success(request, 'Аксессуар добавлен')
         return redirect('crm:warehouse_accessories')
     return render(request, 'crm/warehouse/accessory_form.html', {
         'categories': Accessory.CATEGORIES,
         'suppliers': Supplier.objects.filter(is_active=True),
+        'branches': _accessible_branches(request).filter(is_active=True),
+        'active_branch': getattr(getattr(request.user, 'profile', None), 'branch', None),
     })
 
 
 @crm_required
 def accessory_edit(request, pk):
-    acc = get_object_or_404(Accessory, pk=pk)
+    acc = _branch_scoped_object(request, Accessory.objects.all(), pk)
     if request.method == 'POST':
         acc.name = request.POST['name']
         acc.category = request.POST.get('category', 'other')
@@ -967,6 +1161,7 @@ def accessory_edit(request, pk):
         acc.purchase_price = Decimal(request.POST.get('purchase_price', 0))
         acc.sale_price = Decimal(request.POST.get('sale_price', 0))
         acc.supplier_id = request.POST.get('supplier') or None
+        acc.branch = _selected_accessible_branch(request)
         acc.save()
         messages.success(request, 'Аксессуар обновлён')
         return redirect('crm:warehouse_accessories')
@@ -974,20 +1169,22 @@ def accessory_edit(request, pk):
         'accessory': acc,
         'categories': Accessory.CATEGORIES,
         'suppliers': Supplier.objects.filter(is_active=True),
+        'branches': _accessible_branches(request).filter(is_active=True),
+        'active_branch': getattr(getattr(request.user, 'profile', None), 'branch', None),
     })
 
 
 @crm_required
 @require_POST
 def accessory_stock_in(request, pk):
-    acc = get_object_or_404(Accessory, pk=pk)
+    acc = _branch_scoped_object(request, Accessory.objects.all(), pk)
     qty = int(request.POST.get('quantity', 0))
     if qty > 0:
         acc.quantity += qty
         acc.save(update_fields=['quantity'])
         StockMovement.objects.create(
             accessory=acc, movement_type='in', quantity=qty,
-            comment=request.POST.get('comment', ''), created_by=request.user,
+            comment=request.POST.get('comment', ''), branch=acc.branch, created_by=request.user,
         )
         messages.success(request, f'Поступление {qty} шт.')
     return redirect('crm:warehouse_accessories')
@@ -995,7 +1192,9 @@ def accessory_stock_in(request, pk):
 
 @crm_required
 def stock_movements(request):
-    qs = StockMovement.objects.select_related('part', 'accessory', 'created_by').order_by('-created_at')
+    qs = _branch_scoped_queryset(request, StockMovement.objects.select_related(
+        'part', 'accessory', 'created_by'
+    )).order_by('-created_at')
     if request.GET.get('type'):
         qs = qs.filter(movement_type=request.GET['type'])
     page = Paginator(qs, 50).get_page(request.GET.get('page'))
@@ -1015,52 +1214,68 @@ def supplier_list(request):
 
 @crm_required
 def sale_list(request):
-    qs = SaleOrder.objects.select_related('created_by', 'branch').order_by('-created_at')
+    qs = _branch_scoped_queryset(request, SaleOrder.objects.select_related(
+        'created_by', 'branch'
+    )).order_by('-created_at')
     page = Paginator(qs, 30).get_page(request.GET.get('page'))
     return render(request, 'crm/sales/list.html', {'sales': page})
 
 
 @crm_required
+@require_POST
 def sale_create(request):
     # Создаём черновик и сразу открываем кассу
+    method = request.POST.get('payment_method', 'cash')
+    if method not in dict(PaymentRecord.PAYMENT_METHODS):
+        messages.error(request, 'Выберите допустимый способ оплаты')
+        return redirect('crm:sale_list')
     sale = SaleOrder.objects.create(
         created_by=request.user,
-        payment_method=request.POST.get('payment_method', 'cash') if request.method == 'POST' else 'cash',
+        payment_method=method,
+        branch=_selected_accessible_branch(request),
     )
     return redirect('crm:sale_detail', sale.pk)
 
 
 @crm_required
 def sale_detail(request, pk):
-    sale = get_object_or_404(
+    sale = _branch_scoped_object(request,
         SaleOrder.objects.prefetch_related('items__accessory').select_related('created_by'),
-        pk=pk,
-    )
-    if request.method == 'POST' and not sale.is_finalized:
+        pk)
+    if request.method == 'POST':
+        if sale.is_finalized:
+            messages.error(request, 'Завершённую продажу нельзя изменять')
+            return redirect('crm:sale_detail', pk)
         action = request.POST.get('action')
         if action == 'add_item':
             acc_id = request.POST.get('accessory_id')
-            qty = int(request.POST.get('quantity', 1))
-            price = request.POST.get('price', '').replace(',', '.').strip()
-            if acc_id:
-                try:
-                    acc = Accessory.objects.get(pk=acc_id)
-                    price = Decimal(price) if price else acc.sale_price
-                    SaleOrderItem.objects.create(
-                        order=sale, accessory=acc,
-                        quantity=qty, price=price,
-                    )
-                    # Перечитываем sale без prefetch-кеша — иначе новый товар не виден
-                    sale = SaleOrder.objects.get(pk=sale.pk)
-                    sale.recalculate_total()
-                except (Accessory.DoesNotExist, Exception) as e:
-                    messages.error(request, f'Ошибка добавления товара: {e}')
+            acc = get_object_or_404(_stock_for_order(request, Accessory, sale), pk=acc_id)
+            try:
+                qty = int(request.POST.get('quantity', 1))
+                raw_price = request.POST.get('price', '').replace(',', '.').strip()
+                price = Decimal(raw_price) if raw_price else acc.sale_price
+            except (TypeError, ValueError, ArithmeticError):
+                messages.error(request, 'Укажите корректные количество и цену')
+                return redirect('crm:sale_detail', pk)
+            if qty < 1 or price < 0:
+                messages.error(request, 'Количество должно быть положительным, цена не может быть отрицательной')
+                return redirect('crm:sale_detail', pk)
+            if acc.quantity < qty:
+                messages.error(request, f'Недостаточно "{acc.name}" на складе')
+                return redirect('crm:sale_detail', pk)
+            SaleOrderItem.objects.create(order=sale, accessory=acc, quantity=qty, price=price)
+            sale = SaleOrder.objects.get(pk=sale.pk)
+            sale.recalculate_total()
         elif action == 'set_payment':
-            sale.payment_method = request.POST.get('payment_method', 'cash')
-            sale.save(update_fields=['payment_method'])
+            method = request.POST.get('payment_method', 'cash')
+            if method not in dict(PaymentRecord.PAYMENT_METHODS):
+                messages.error(request, 'Выберите допустимый способ оплаты')
+            else:
+                sale.payment_method = method
+                sale.save(update_fields=['payment_method'])
         return redirect('crm:sale_detail', pk)
 
-    accessories = Accessory.objects.filter(quantity__gt=0).order_by('category', 'name')
+    accessories = _stock_for_order(request, Accessory, sale).filter(quantity__gt=0).order_by('category', 'name')
     return render(request, 'crm/sales/detail.html', {
         'sale': sale,
         'accessories': accessories,
@@ -1071,7 +1286,10 @@ def sale_detail(request, pk):
 @crm_required
 @require_POST
 def sale_remove_item(request, pk, item_pk):
-    sale = get_object_or_404(SaleOrder, pk=pk)
+    sale = _branch_scoped_object(request, SaleOrder.objects.all(), pk)
+    if sale.is_finalized:
+        messages.error(request, 'Завершённую продажу нельзя изменять')
+        return redirect('crm:sale_detail', pk)
     get_object_or_404(SaleOrderItem, pk=item_pk, order=sale).delete()
     sale.recalculate_total()
     return redirect('crm:sale_detail', pk)
@@ -1080,29 +1298,45 @@ def sale_remove_item(request, pk, item_pk):
 @crm_required
 @require_POST
 def sale_finalize(request, pk):
-    sale = get_object_or_404(SaleOrder, pk=pk)
+    sale = _branch_scoped_object(request, SaleOrder.objects.all(), pk)
     if sale.is_finalized:
         messages.warning(request, 'Продажа уже завершена')
         return redirect('crm:sale_detail', pk)
     with transaction.atomic():
-        for item in sale.items.select_related('accessory').all():
-            acc = item.accessory
-            if acc.quantity < item.quantity:
-                messages.error(request, f'Недостаточно "{acc.name}" на складе')
+        sale = SaleOrder.objects.select_for_update().get(pk=sale.pk)
+        if sale.is_finalized:
+            messages.warning(request, 'Продажа уже завершена')
+            return redirect('crm:sale_detail', pk)
+        requirements = defaultdict(int)
+        for item in sale.items.values('accessory_id', 'quantity'):
+            requirements[item['accessory_id']] += item['quantity']
+        accessories = {
+            accessory.pk: accessory
+            for accessory in Accessory.objects.select_for_update().filter(pk__in=requirements)
+        }
+        for accessory_id, quantity in requirements.items():
+            acc = accessories.get(accessory_id)
+            if not acc or acc.quantity < quantity:
+                messages.error(request, f'Недостаточно "{acc.name if acc else "товара"}" на складе')
                 return redirect('crm:sale_detail', pk)
-            acc.quantity -= item.quantity
+            if acc.branch_id != sale.branch_id and not (
+                acc.branch_id is None and get_role(request.user) in ('admin', 'manager')
+            ):
+                raise Http404
+        for accessory_id, quantity in requirements.items():
+            acc = accessories[accessory_id]
+            acc.quantity -= quantity
             acc.save(update_fields=['quantity'])
             StockMovement.objects.create(
                 accessory=acc, movement_type='sale',
-                quantity=-item.quantity,
-                comment=f'Продажа {sale.order_number}',
+                quantity=-quantity, comment=f'Продажа {sale.order_number}', branch=sale.branch,
                 created_by=request.user,
             )
         sale.is_finalized = True
         sale.save(update_fields=['is_finalized'])
         PaymentRecord.objects.create(
             sale_order=sale, payment_type='sale',
-            method=sale.payment_method, amount=sale.total,
+            method=sale.payment_method, amount=sale.total, branch=sale.branch,
             created_by=request.user,
         )
         messages.success(request, f'Продажа {sale.order_number} завершена')
@@ -1213,6 +1447,7 @@ def _calc_payroll(emp, year, month):
 
 
 @crm_required
+@manager_required
 def finance(request):
     now = timezone.now()
     month_start = now.date().replace(day=1)
@@ -1312,6 +1547,7 @@ def finance(request):
 
 
 @crm_required
+@manager_required
 @require_POST
 def expense_create(request):
     Expense.objects.create(
@@ -1319,6 +1555,7 @@ def expense_create(request):
         description=request.POST.get('description', ''),
         amount=Decimal(request.POST.get('amount', 0)),
         date=request.POST.get('date') or timezone.now().date(),
+        branch=_selected_accessible_branch(request),
         created_by=request.user,
     )
     messages.success(request, 'Расход добавлен')
@@ -1457,6 +1694,7 @@ def payroll_add_record(request, employee_pk):
 # ─── ANALYTICS ────────────────────────────────────────────────────────────────
 
 @crm_required
+@manager_required
 def analytics(request):
     period = request.GET.get('period', '30')
     now = timezone.now().date()
@@ -1598,7 +1836,9 @@ def analytics(request):
 
 @crm_required
 def task_list(request):
-    qs = Task.objects.select_related('assigned_to', 'created_by', 'repair_order')
+    qs = _branch_scoped_queryset(request, Task.objects.select_related(
+        'assigned_to', 'created_by', 'repair_order'
+    ))
     profile = getattr(request.user, 'profile', None)
     if profile and profile.role == 'master':
         qs = qs.filter(assigned_to=request.user)
@@ -1620,6 +1860,7 @@ def task_create(request):
         priority=request.POST.get('priority', 'medium'),
         assigned_to_id=request.POST.get('assigned_to') or None,
         due_date=request.POST.get('due_date') or None,
+        branch=_selected_accessible_branch(request),
         created_by=request.user,
     )
     messages.success(request, 'Задача создана')
@@ -1629,8 +1870,12 @@ def task_create(request):
 @crm_required
 @require_POST
 def task_update_status(request, pk):
-    task = get_object_or_404(Task, pk=pk)
-    task.status = request.POST.get('status', task.status)
+    task = _branch_scoped_object(request, Task.objects.all(), pk)
+    status = request.POST.get('status', task.status)
+    if status not in dict(Task.STATUS_CHOICES):
+        messages.error(request, 'Выберите допустимый статус задачи')
+        return redirect('crm:task_list')
+    task.status = status
     task.save(update_fields=['status'])
     return redirect('crm:task_list')
 
@@ -1638,7 +1883,7 @@ def task_update_status(request, pk):
 # ─── EMPLOYEES ────────────────────────────────────────────────────────────────
 
 @crm_required
-@manager_required
+@admin_required
 def employee_list(request):
     users = User.objects.select_related('profile').filter(
         profile__is_active=True
@@ -1647,7 +1892,7 @@ def employee_list(request):
 
 
 @crm_required
-@manager_required
+@admin_required
 def employee_create(request):
     if request.method == 'POST':
         with transaction.atomic():
@@ -1680,7 +1925,7 @@ def employee_create(request):
 
 
 @crm_required
-@manager_required
+@admin_required
 def employee_edit(request, pk):
     user = get_object_or_404(User, pk=pk)
     profile = getattr(user, 'profile', None)
@@ -2057,7 +2302,7 @@ def appointment_list(request):
 def appointment_create(request):
     profile = getattr(request.user, 'profile', None)
     if request.method == 'POST':
-        branch_id = request.POST.get('branch') or None
+        branch = _selected_accessible_branch(request)
         appt = Appointment.objects.create(
             name=request.POST.get('name', '').strip(),
             phone=request.POST.get('phone', '').strip(),
@@ -2068,7 +2313,7 @@ def appointment_create(request):
             notes=request.POST.get('notes', '').strip(),
             source='crm',
             status='new',
-            branch_id=branch_id,
+            branch=branch,
         )
         messages.success(request, f'Запись для {appt.name} создана')
         return redirect('crm:appointment_list')
@@ -2089,19 +2334,26 @@ def appointment_create(request):
 
 @crm_required
 def appointment_edit(request, pk):
-    appt = get_object_or_404(Appointment, pk=pk)
+    appt = _branch_scoped_object(request, Appointment.objects.all(), pk)
     profile = getattr(request.user, 'profile', None)
     if request.method == 'POST':
+        status = request.POST.get('status', appt.status)
+        source = request.POST.get('source', appt.source)
+        if status not in dict(Appointment.STATUS_CHOICES) or source not in dict(Appointment.SOURCE_CHOICES):
+            messages.error(request, 'Выберите допустимые статус и источник')
+            return redirect('crm:appointment_edit', pk=pk)
+        branch_id = request.POST.get('branch') or None
+        branch = get_object_or_404(_accessible_branches(request), pk=branch_id) if branch_id else None
         appt.name = request.POST.get('name', '').strip() or appt.name
         appt.phone = request.POST.get('phone', '').strip() or appt.phone
         appt.device = request.POST.get('device', '').strip()
         appt.problem = request.POST.get('problem', '').strip()
-        appt.status = request.POST.get('status', appt.status)
-        appt.source = request.POST.get('source', appt.source)
+        appt.status = status
+        appt.source = source
         appt.preferred_date = request.POST.get('preferred_date') or None
         appt.preferred_time = request.POST.get('preferred_time') or None
         appt.notes = request.POST.get('notes', '').strip()
-        appt.branch_id = request.POST.get('branch') or None
+        appt.branch = branch
         appt.save()
         messages.success(request, f'Запись для {appt.name} обновлена')
         return redirect('crm:appointment_list')
@@ -2120,45 +2372,66 @@ def appointment_edit(request, pk):
 
 
 @crm_required
+@require_POST
 def appointment_delete(request, pk):
-    appt = get_object_or_404(Appointment, pk=pk)
-    if request.method == 'POST':
-        name = appt.name
-        appt.delete()
-        messages.success(request, f'Запись для {name} удалена')
+    appt = _branch_scoped_object(request, Appointment.objects.all(), pk)
+    name = appt.name
+    appt.delete()
+    messages.success(request, f'Запись для {name} удалена')
     return redirect('crm:appointment_list')
 
 
 @crm_required
+@require_POST
 def appointment_update_status(request, pk):
-    appt = get_object_or_404(Appointment, pk=pk)
-    if request.method == 'POST':
-        appt.status = request.POST.get('status', appt.status)
-        appt.notes = request.POST.get('notes', appt.notes)
-        appt.save()
-        messages.success(request, 'Статус записи обновлён')
+    appt = _branch_scoped_object(request, Appointment.objects.all(), pk)
+    status = request.POST.get('status', appt.status)
+    if status not in dict(Appointment.STATUS_CHOICES):
+        messages.error(request, 'Выберите допустимый статус записи')
+        return redirect('crm:appointment_list')
+    appt.status = status
+    appt.notes = request.POST.get('notes', appt.notes)
+    appt.save()
+    messages.success(request, 'Статус записи обновлён')
     return redirect('crm:appointment_list')
 
 
 @crm_required
+@require_POST
 def appointment_to_order(request, pk):
     """Convert appointment to a repair order — redirect to repair_create with pre-filled data."""
     from urllib.parse import urlencode
     from django.urls import reverse
-    appt = get_object_or_404(Appointment, pk=pk)
-    if appt.created_order:
-        return redirect('crm:repair_detail', pk=appt.created_order.pk)
+    with transaction.atomic():
+        appt = _branch_scoped_object(
+            request, Appointment.objects.select_for_update(), pk,
+        )
+        if appt.created_order:
+            return redirect('crm:repair_detail', pk=appt.created_order.pk)
 
-    # Find or create customer by phone so repair_create can pre-select them
-    customer, _ = Customer.objects.get_or_create(
-        phone=appt.phone,
-        defaults={'name': appt.name}
-    )
+        if appt.branch_id is None:
+            branch = _selected_accessible_branch(request)
+            if branch is None:
+                branch = _accessible_branches(request).filter(
+                    is_active=True,
+                ).order_by('pk').first()
+            if branch is None:
+                messages.error(request, 'Сначала создайте и выберите рабочее место')
+                return redirect('crm:appointment_edit', pk=appt.pk)
+            appt.branch = branch
+            appt.save(update_fields=['branch'])
+
+        # Keep a converted lead, customer, and eventual order in one branch.
+        customer, _ = Customer.objects.get_or_create(
+            phone=appt.phone, branch=appt.branch,
+            defaults={'name': appt.name}
+        )
 
     params = urlencode({
         'customer_id':    customer.pk,
         'complaint':      appt.problem or f'Запись от {appt.created_at.strftime("%d.%m.%Y")}',
         'from_appointment': appt.pk,
+        'branch':           appt.branch_id or '',
         'prefill_name':   appt.name,
         'prefill_phone':  appt.phone,
     })

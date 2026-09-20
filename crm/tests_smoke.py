@@ -21,6 +21,7 @@ ADMIN_OR_MANAGER_ONLY = {
     "filemanager_upload", "filemanager_rename", "filemanager_download",
     "filemanager_mkdir", "filemanager_delete", "price_service_save",
     "price_model_save", "price_brand_save",
+    "finance", "analytics", "expense_create",
 }
 GET_REDIRECTS = {
     "login", "branch_save", "filemanager_upload", "filemanager_rename",
